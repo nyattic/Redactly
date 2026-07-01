@@ -51,7 +51,7 @@ open build/FaceVeil.app
 Install dependencies with Homebrew:
 
 ```bash
-brew install cmake opencv onnxruntime spdlog
+brew install cmake qt opencv onnxruntime spdlog
 ```
 
 ### Windows (PowerShell)
