@@ -53,9 +53,12 @@ else
 fi
 
 # ── Build ──────────────────────────────────────────────────────────
+# Include the general Homebrew prefix so find_package can locate exiv2 (and its
+# CMake config) in addition to Qt; without it a release build may silently drop
+# metadata preservation.
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$HOMEBREW_PREFIX"
 cmake --build "$BUILD_DIR" --config Release
 
 rm -rf "$DIST_DIR"

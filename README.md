@@ -3,7 +3,7 @@
 ![Release](https://img.shields.io/github/v/release/nyattic/FaceVeil?style=flat&color=6366f1)
 ![Downloads](https://img.shields.io/github/downloads/nyattic/FaceVeil/total?style=flat&color=10b981)
 ![Last Commit](https://img.shields.io/github/last-commit/nyattic/FaceVeil?style=flat&color=f59e0b)
-![License](https://img.shields.io/badge/app%20code-PolyForm%20Noncommercial%201.0.0-8b5cf6?style=flat)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-8b5cf6?style=flat)
 
 Local desktop app that automatically mosaics faces in your photos. Drop in images or folders, pick a model, get anonymized copies — your photos are processed entirely on your machine and never uploaded.
 
@@ -84,13 +84,17 @@ Your images never leave your device — they are read from disk, processed local
 
 ## License
 
-**Application source code** — PolyForm Noncommercial License 1.0.0. SPDX identifier: `PolyForm-Noncommercial-1.0.0`. Personal and other noncommercial use is permitted; **commercial use is not**. See [LICENSE](LICENSE).
+**Application source code** — GNU General Public License v3.0 or later. SPDX identifier: `GPL-3.0-or-later`. You may use, study, share, and modify FaceVeil, including for commercial purposes; if you distribute it or a derivative, you must do so under the GPL and make the corresponding source available. See [LICENSE](LICENSE).
+
+> The application was previously licensed under PolyForm Noncommercial 1.0.0. It moved to the GPL v3.0-or-later starting with v1.1.0 because FaceVeil now links [Exiv2](https://exiv2.org/) (GPL-2.0-or-later) for metadata preservation. Versions released earlier under PolyForm Noncommercial remain under that license.
 
 Copyright © 2026 Nyabi.
 
+FaceVeil is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 **SCRFD models** — the built-in models are **not distributed with FaceVeil**; the app downloads them on first use from a [Hugging Face mirror](https://huggingface.co/RuteNL/SCRFD-face-detection-ONNX). They originate from [InsightFace](https://github.com/deepinsight/insightface) and are available for **non-commercial research use only**, under their own terms separate from the application license (the mirror's Apache-2.0 tag does not override InsightFace's terms). See the [InsightFace Model Zoo](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md) for details.
 
-**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), spdlog and {fmt} (MIT). Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
+**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT). Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
 
 ## Citation
 

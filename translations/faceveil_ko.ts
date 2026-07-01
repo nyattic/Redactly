@@ -55,9 +55,9 @@ FaceVeil can download it once (%2 MB) from Hugging Face. The model is provided b
 Download now?</source>
         <translation>%1 모델이 아직 이 컴퓨터에 없습니다.
 
-FaceVeil이 Hugging Face에서 한 번(%2 MB) 내려받을 수 있습니다. 이 모델은 InsightFace가 비상업적 용도로 제공합니다. 사진은 절대 업로드되지 않습니다.
+FaceVeil이 Hugging Face에서 한 번(%2 MB) 다운로드할 수 있습니다. 이 모델은 InsightFace가 비상업적 용도로 제공합니다. 사진은 절대 업로드되지 않습니다.
 
-지금 내려받을까요?</translation>
+지금 다운로드할까요?</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="449"/>
@@ -131,6 +131,11 @@ Continue?</source>
         <translation>찾아보기…</translation>
     </message>
     <message>
+        <location filename="../src/MainWindow.cpp" line="583"/>
+        <source>Download</source>
+        <translation>다운로드</translation>
+    </message>
+    <message>
         <location filename="../src/MainWindow.cpp" line="605"/>
         <source>Inputs</source>
         <translation>입력</translation>
@@ -139,6 +144,11 @@ Continue?</source>
         <location filename="../src/MainWindow.cpp" line="610"/>
         <source>Drag images or folders here, or use the buttons below.</source>
         <translation>이미지나 폴더를 여기로 끌어놓거나 아래 버튼을 사용하세요.</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="620"/>
+        <source>Drop images or folders here</source>
+        <translation>이미지나 폴더를 여기로 드래그하세요</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="621"/>
@@ -188,6 +198,18 @@ Continue?</source>
         <location filename="../src/MainWindow.cpp" line="677"/>
         <source>Choose…</source>
         <translation>선택…</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="686"/>
+        <source>Preserve original metadata (EXIF, location, color profile)</source>
+        <translation>원본 메타데이터 유지 (EXIF·위치·색 프로파일)</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="690"/>
+        <source>Off (default): output carries no metadata — GPS, camera, and timestamps are removed.
+On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves format and bit depth at maximum quality. Best for archiving high-resolution photos.</source>
+        <translation>꺼짐(기본값): 출력에 메타데이터가 남지 않습니다 — GPS·카메라·촬영 시각 제거.
+켜짐: 원본의 EXIF/IPTC/XMP와 ICC 색 프로파일을 복사하고, 포맷과 비트 심도를 최대 품질로 보존합니다. 고해상도 사진 보관에 적합합니다.</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="699"/>
@@ -270,6 +292,30 @@ Covers ears, hairline, and chin that the detector may miss.
         <location filename="../src/MainWindow.cpp" line="801"/>
         <source>Anonymization</source>
         <translation>익명화 방식</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="803"/>
+        <source>Shape</source>
+        <translation>모양</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="747"/>
+        <source>Rectangle</source>
+        <translation>사각형</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="748"/>
+        <source>Rounded (ellipse)</source>
+        <translation>둥근 모양 (타원)</translation>
+    </message>
+    <message>
+        <location filename="../src/MainWindow.cpp" line="752"/>
+        <source>Shape of the obscured region.
+Rectangle = full padded box.
+Rounded = elliptical mask that follows the face and leaves corners untouched. Default: Rectangle</source>
+        <translation>가려지는 영역의 모양입니다.
+사각형 = 여백을 포함한 전체 상자.
+둥근 모양 = 얼굴을 따라가는 타원형 마스크로, 모서리는 원본을 남깁니다. 기본값: 사각형</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="804"/>
@@ -365,7 +411,7 @@ Covers ears, hairline, and chin that the detector may miss.
     <message>
         <location filename="../src/MainWindow.cpp" line="1030"/>
         <source>Downloading %1…</source>
-        <translation>%1 내려받는 중…</translation>
+        <translation>%1 다운로드 중…</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1033"/>
@@ -440,8 +486,8 @@ Covers ears, hairline, and chin that the detector may miss.
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="1379"/>
-        <source>Not downloaded yet — fetched when you press Start</source>
-        <translation>아직 내려받지 않음 — 시작을 누르면 받습니다</translation>
+        <source>Not downloaded yet — click Download</source>
+        <translation>아직 다운로드하지 않음 — 다운로드를 누르세요</translation>
     </message>
 </context>
 <context>
@@ -590,6 +636,11 @@ Covers ears, hairline, and chin that the detector may miss.
         <location filename="../src/ProcessorWorker.cpp" line="552"/>
         <source>Processed %1 face(s): %2</source>
         <translation>얼굴 %1개 처리: %2</translation>
+    </message>
+    <message>
+        <location filename="../src/ProcessorWorker.cpp" line="548"/>
+        <source>Saved, but could not copy metadata: %1</source>
+        <translation>저장했지만 메타데이터를 복사하지 못했습니다: %1</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="562"/>

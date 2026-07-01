@@ -1,5 +1,6 @@
 #include "faceveil/ProcessorWorker.hpp"
 
+#include "faceveil/ImageIo.hpp"
 #include "faceveil/ImageScanner.hpp"
 #include "faceveil/Mosaic.hpp"
 #include "faceveil/ReviewTypes.hpp"
@@ -203,10 +204,11 @@ namespace faceveil
             return parent.empty() ? std::filesystem::path(tempName) : parent / tempName;
         }
 
-        bool atomicImwrite(const std::filesystem::path &destination, const cv::Mat &image)
+        bool atomicImwrite(const std::filesystem::path &destination, const cv::Mat &image,
+                           const std::vector<int> &params = {})
         {
             const auto temp = uniqueTempPath(destination);
-            if (!cv::imwrite(temp.string(), image))
+            if (!cv::imwrite(temp.string(), image, params))
             {
                 std::error_code ec;
                 std::filesystem::remove(temp, ec);
@@ -266,6 +268,8 @@ namespace faceveil
                                      int mosaicBlockSize,
                                      float paddingRatio,
                                      AnonymizationMethod method,
+                                     MaskShape shape,
+                                     bool preserveMetadata,
                                      bool reviewEnabled,
                                      QObject *reviewReceiver,
                                      std::shared_ptr<ScrfdFaceDetector> cachedDetector)
@@ -278,6 +282,8 @@ namespace faceveil
           mosaicBlockSize_(mosaicBlockSize),
           paddingRatio_(paddingRatio),
           method_(method),
+          shape_(shape),
+          preserveMetadata_(preserveMetadata),
           reviewEnabled_(reviewEnabled),
           reviewReceiver_(reviewReceiver),
           detector_(std::move(cachedDetector))
@@ -420,7 +426,7 @@ namespace faceveil
                     continue;
                 }
 
-                cv::Mat image = cv::imread(source.string(), cv::IMREAD_COLOR);
+                cv::Mat image = cv::imread(source.string(), cv::IMREAD_UNCHANGED);
                 if (image.empty())
                 {
                     emit logMessage(
@@ -429,6 +435,8 @@ namespace faceveil
                     emit progressChanged(++completed, total);
                     continue;
                 }
+
+                applyOrientation(image, readExifOrientation(source));
 
                 if (cancelled_.load(std::memory_order_acquire))
                 {
@@ -449,8 +457,10 @@ namespace faceveil
                     continue;
                 }
 
+                const cv::Mat detectMat = toDetectionBgr(image);
+
                 emit stageChanged(index, total, tr("Detecting"), fileName);
-                const auto detected = detector_->detect(image, scoreThreshold_, nmsThreshold_);
+                const auto detected = detector_->detect(detectMat, scoreThreshold_, nmsThreshold_);
                 if (cancelled_.load(std::memory_order_acquire))
                 {
                     break;
@@ -463,7 +473,7 @@ namespace faceveil
                 {
                     emit stageChanged(index, total, tr("Reviewing"), fileName);
 
-                    auto [preview, previewScale] = makeReviewPreview(image);
+                    auto [preview, previewScale] = makeReviewPreview(detectMat);
                     const QVector<QRectF> detectedRects = scaleRects(toQRects(detected), previewScale);
 
                     ReviewResult reviewResult;
@@ -517,10 +527,26 @@ namespace faceveil
                     continue;
                 }
 
+                const auto encodeParams = encodeParamsForExtension(destination.extension().string());
+
                 if (copyOriginalThisImage)
                 {
                     emit stageChanged(index, total, tr("Saving"), fileName);
-                    if (!atomicImwrite(destination, image))
+                    bool copied = false;
+                    if (preserveMetadata_)
+                    {
+                        std::error_code copyError;
+                        std::filesystem::copy_file(source, destination,
+                                                   std::filesystem::copy_options::overwrite_existing,
+                                                   copyError);
+                        copied = !copyError;
+                    }
+                    else
+                    {
+                        copied = atomicImwrite(destination, image, encodeParams);
+                    }
+
+                    if (!copied)
                     {
                         emit logMessage(tr("Failed to copy: %1").arg(
                             QString::fromStdString(destination.string())));
@@ -535,7 +561,7 @@ namespace faceveil
                 }
 
                 emit stageChanged(index, total, tr("Applying mosaic"), fileName);
-                applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_);
+                applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_, shape_);
 
                 if (cancelled_.load(std::memory_order_acquire))
                 {
@@ -543,12 +569,16 @@ namespace faceveil
                 }
 
                 emit stageChanged(index, total, "Saving", fileName);
-                if (!atomicImwrite(destination, image))
+                if (!atomicImwrite(destination, image, encodeParams))
                 {
                     emit logMessage(tr("Failed to save: %1").arg(QString::fromStdString(destination.string())));
                     ++failedCount;
                 } else
                 {
+                    if (preserveMetadata_ && !copyMetadata(source, destination, true))
+                    {
+                        emit logMessage(tr("Saved, but could not copy metadata: %1").arg(fileName));
+                    }
                     emit logMessage(tr("Processed %1 face(s): %2")
                         .arg(static_cast<int>(finalFaces.size()))
                         .arg(fileName));

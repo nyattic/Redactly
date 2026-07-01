@@ -57,8 +57,26 @@ namespace faceveil
         }
     }
 
+    void applyEffect(cv::Mat roi, AnonymizationMethod method, int blockSize)
+    {
+        switch (method)
+        {
+            case AnonymizationMethod::Blur:
+                blurRegion(roi);
+                break;
+            case AnonymizationMethod::Fill:
+                fillRegion(roi);
+                break;
+            case AnonymizationMethod::Mosaic:
+            default:
+                mosaicRegion(roi, blockSize);
+                break;
+        }
+    }
+
     void applyAnonymization(cv::Mat &image, const FaceDetections &detections,
-                            AnonymizationMethod method, int blockSize, float paddingRatio)
+                            AnonymizationMethod method, int blockSize, float paddingRatio,
+                            MaskShape shape)
     {
         if (image.empty())
         {
@@ -75,18 +93,21 @@ namespace faceveil
             const cv::Rect roiRect = paddedRegion(detection.box, width, height, paddingRatio);
             cv::Mat roi = image(roiRect);
 
-            switch (method)
+            if (shape == MaskShape::Ellipse)
             {
-                case AnonymizationMethod::Blur:
-                    blurRegion(roi);
-                    break;
-                case AnonymizationMethod::Fill:
-                    fillRegion(roi);
-                    break;
-                case AnonymizationMethod::Mosaic:
-                default:
-                    mosaicRegion(roi, blockSize);
-                    break;
+                cv::Mat masked = roi.clone();
+                applyEffect(masked, method, blockSize);
+
+                cv::Mat mask(roi.size(), CV_8UC1, cv::Scalar(0));
+                cv::ellipse(mask,
+                            cv::Point(roi.cols / 2, roi.rows / 2),
+                            cv::Size(roi.cols / 2, roi.rows / 2),
+                            0.0, 0.0, 360.0, cv::Scalar(255), cv::FILLED, cv::LINE_AA);
+                masked.copyTo(roi, mask);
+            }
+            else
+            {
+                applyEffect(roi, method, blockSize);
             }
         }
     }

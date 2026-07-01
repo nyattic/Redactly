@@ -28,6 +28,8 @@ namespace faceveil
                         int mosaicBlockSize,
                         float paddingRatio,
                         AnonymizationMethod method,
+                        MaskShape shape,
+                        bool preserveMetadata,
                         bool reviewEnabled,
                         QObject *reviewReceiver,
                         std::shared_ptr<ScrfdFaceDetector> cachedDetector = {});
@@ -60,6 +62,8 @@ namespace faceveil
         int mosaicBlockSize_;
         float paddingRatio_;
         AnonymizationMethod method_;
+        MaskShape shape_;
+        bool preserveMetadata_;
         bool reviewEnabled_;
         QPointer<QObject> reviewReceiver_;
         std::atomic<bool> cancelled_{false};

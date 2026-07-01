@@ -40,7 +40,11 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QProgressDialog>
+#include <QStyle>
+#include <QTimer>
 
 #include <spdlog/spdlog.h>
 
@@ -225,6 +229,14 @@ namespace faceveil
             QLabel#statusLabel {
                 color: #6B7280;
                 font-size: 12px;
+            }
+            QLabel#statusLabel[state="warning"] {
+                color: #DC2626;
+                font-weight: 600;
+            }
+            QLineEdit[invalid="true"], QComboBox[invalid="true"],
+            QListWidget[invalid="true"] {
+                border: 1px solid #DC2626;
             }
             QToolButton#advancedToggle {
                 background: transparent;
@@ -489,6 +501,35 @@ namespace faceveil
             card->setFrameShape(QFrame::NoFrame);
             return card;
         }
+
+        class DropListWidget final : public QListWidget
+        {
+        public:
+            using QListWidget::QListWidget;
+
+            void setPlaceholderText(const QString &text)
+            {
+                placeholder_ = text;
+                viewport()->update();
+            }
+
+        protected:
+            void paintEvent(QPaintEvent *event) override
+            {
+                QListWidget::paintEvent(event);
+                if (count() != 0 || placeholder_.isEmpty())
+                {
+                    return;
+                }
+                QPainter painter(viewport());
+                painter.setPen(QColor("#9CA3AF"));
+                painter.drawText(viewport()->rect().adjusted(24, 0, -24, 0),
+                                 Qt::AlignCenter | Qt::TextWordWrap, placeholder_);
+            }
+
+        private:
+            QString placeholder_;
+        };
     }
 
     MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -543,11 +584,17 @@ namespace faceveil
 
         auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
-        versionLabel->setAlignment(Qt::AlignRight | Qt::AlignBottom);
-        titleRow->addWidget(title);
+
+        auto *titleGroup = new QWidget(header);
+        auto *titleGroupLayout = new QHBoxLayout(titleGroup);
+        titleGroupLayout->setContentsMargins(0, 0, 0, 0);
+        titleGroupLayout->setSpacing(8);
+        titleGroupLayout->addWidget(title, 0, Qt::AlignBottom);
+        titleGroupLayout->addWidget(versionLabel, 0, Qt::AlignBottom);
+
+        titleRow->addWidget(titleGroup, 0, Qt::AlignVCenter);
         titleRow->addStretch(1);
-        titleRow->addWidget(languageCombo_);
-        titleRow->addWidget(versionLabel);
+        titleRow->addWidget(languageCombo_, 0, Qt::AlignVCenter);
 
         auto *subtitle = new QLabel(header);
         subtitle->setObjectName("subtitleLabel");
@@ -580,13 +627,20 @@ namespace faceveil
             modelPathEdit_ = new QLineEdit(card);
             modelPathEdit_->setReadOnly(true);
             addRetranslation([this]{ modelPathEdit_->setPlaceholderText(tr("Bundled SCRFD model path")); });
+            downloadButton_ = new QPushButton(card);
+            downloadButton_->setObjectName("primaryButton");
+            addRetranslation([this]{ downloadButton_->setText(tr("Download")); });
+            downloadButton_->setCursor(Qt::PointingHandCursor);
+            downloadButton_->setVisible(false);
             auto *modelButton = new QPushButton(card);
             addRetranslation([this, modelButton]{ modelButton->setText(tr("Browse…")); });
             modelButton->setCursor(Qt::PointingHandCursor);
             pathRow->addWidget(modelPathEdit_, 1);
+            pathRow->addWidget(downloadButton_);
             pathRow->addWidget(modelButton);
             cardLayout->addLayout(pathRow);
 
+            connect(downloadButton_, &QPushButton::clicked, this, &MainWindow::downloadSelectedModel);
             connect(modelButton, &QPushButton::clicked, this, &MainWindow::chooseModel);
             connect(modelCombo_, &QComboBox::currentIndexChanged,
                     this, &MainWindow::updateModelPathFromSelection);
@@ -609,10 +663,13 @@ namespace faceveil
             addRetranslation([this, inputsHint]
                              { inputsHint->setText(tr("Drag images or folders here, or use the buttons below.")); });
 
-            inputList_ = new QListWidget(card);
+            auto *dropList = new DropListWidget(card);
+            inputList_ = dropList;
             inputList_->setSelectionMode(QAbstractItemView::ExtendedSelection);
             inputList_->setMinimumHeight(140);
             inputList_->setAlternatingRowColors(false);
+            addRetranslation([dropList]
+                             { dropList->setPlaceholderText(tr("Drop images or folders here")); });
             cardLayout->addWidget(inputList_);
 
             auto *buttonRow = new QHBoxLayout();
@@ -681,6 +738,19 @@ namespace faceveil
             cardLayout->addLayout(outputRow);
             connect(outputButton, &QPushButton::clicked, this, &MainWindow::chooseOutputDirectory);
 
+            preserveMetaCheck_ = new QCheckBox(card);
+            addRetranslation([this]
+                             { preserveMetaCheck_->setText(tr("Preserve original metadata (EXIF, location, color profile)")); });
+            preserveMetaCheck_->setChecked(false);
+            addRetranslation([this]
+                             {
+                                 preserveMetaCheck_->setToolTip(tr(
+                                     "Off (default): output carries no metadata — GPS, camera, and timestamps are removed.\n"
+                                     "On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preserves "
+                                     "format and bit depth at maximum quality. Best for archiving high-resolution photos."));
+                             });
+            cardLayout->addWidget(preserveMetaCheck_);
+
             root->addWidget(card);
         }
 
@@ -742,6 +812,23 @@ namespace faceveil
                                      "Solid fill = opaque black box, irreversible. Default: Mosaic"));
                              });
 
+            shapeCombo_ = new QComboBox(advancedBody_);
+            shapeCombo_->addItem(QString(), static_cast<int>(MaskShape::Rectangle));
+            shapeCombo_->addItem(QString(), static_cast<int>(MaskShape::Ellipse));
+            addRetranslation([this]
+                             {
+                                 shapeCombo_->setItemText(0, tr("Rectangle"));
+                                 shapeCombo_->setItemText(1, tr("Rounded (ellipse)"));
+                             });
+            addRetranslation([this]
+                             {
+                                 shapeCombo_->setToolTip(tr(
+                                     "Shape of the obscured region.\n"
+                                     "Rectangle = full padded box.\n"
+                                     "Rounded = elliptical mask that follows the face and leaves corners untouched. "
+                                     "Default: Rectangle"));
+                             });
+
             scoreThresholdSpin_ = new QDoubleSpinBox(advancedBody_);
             scoreThresholdSpin_->setRange(0.05, 0.99);
             scoreThresholdSpin_->setSingleStep(0.05);
@@ -800,6 +887,9 @@ namespace faceveil
             auto *methodLabel = makeFieldLabel(advancedBody_);
             addRetranslation([this, methodLabel]{ methodLabel->setText(tr("Anonymization")); });
             grid->addRow(methodLabel, methodCombo_);
+            auto *shapeLabel = makeFieldLabel(advancedBody_);
+            addRetranslation([this, shapeLabel]{ shapeLabel->setText(tr("Shape")); });
+            grid->addRow(shapeLabel, shapeCombo_);
             auto *scoreLabel = makeFieldLabel(advancedBody_);
             addRetranslation([this, scoreLabel]{ scoreLabel->setText(tr("Score threshold")); });
             grid->addRow(scoreLabel, scoreThresholdSpin_);
@@ -1015,7 +1105,7 @@ namespace faceveil
 
         if (modelPath.isEmpty())
         {
-            appendLog(tr("Choose a SCRFD ONNX model first."));
+            reportValidationIssue(tr("Choose a SCRFD ONNX model first."), modelCombo_);
             return;
         }
 
@@ -1044,13 +1134,13 @@ namespace faceveil
 
         if (inputList_->count() == 0)
         {
-            appendLog(tr("Add at least one image or folder."));
+            reportValidationIssue(tr("Add at least one image or folder."), inputList_);
             return;
         }
 
         if (outputDirEdit_->text().isEmpty())
         {
-            appendLog(tr("Choose an output folder."));
+            reportValidationIssue(tr("Choose an output folder."), outputDirEdit_);
             return;
         }
 
@@ -1075,9 +1165,10 @@ namespace faceveil
             const bool isUnder = canonicalOutput.startsWith(withSep, Qt::CaseInsensitive);
             if (isSame || isUnder)
             {
-                appendLog(tr("Refusing to run: output folder is inside input '%1'. "
-                             "Pick a different output folder so originals aren't overwritten.")
-                    .arg(input));
+                reportValidationIssue(tr("Refusing to run: output folder is inside input '%1'. "
+                                         "Pick a different output folder so originals aren't overwritten.")
+                                          .arg(input),
+                                      outputDirEdit_);
                 return;
             }
         }
@@ -1098,6 +1189,8 @@ namespace faceveil
                                       blockSizeSpin_->value(),
                                       static_cast<float>(paddingSpin_->value()),
                                       static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt()),
+                                      static_cast<MaskShape>(shapeCombo_->currentData().toInt()),
+                                      preserveMetaCheck_->isChecked(),
                                       reviewCheck_->isChecked(),
                                       this,
                                       std::move(detectorForRun));
@@ -1179,6 +1272,7 @@ namespace faceveil
         blockSizeSpin_->setValue(kDefaultBlockSize);
         paddingSpin_->setValue(kDefaultPadding);
         methodCombo_->setCurrentIndex(0);
+        shapeCombo_->setCurrentIndex(0);
     }
 
     void MainWindow::closeEvent(QCloseEvent *event)
@@ -1221,6 +1315,7 @@ namespace faceveil
 
         recursiveCheck_->setChecked(settings.value("recursive", true).toBool());
         reviewCheck_->setChecked(settings.value("review", false).toBool());
+        preserveMetaCheck_->setChecked(settings.value("preserveMetadata", false).toBool());
 
         scoreThresholdSpin_->setValue(settings.value("scoreThreshold", kDefaultScoreThreshold).toDouble());
         nmsThresholdSpin_->setValue(settings.value("nmsThreshold", kDefaultNmsThreshold).toDouble());
@@ -1231,6 +1326,12 @@ namespace faceveil
         if (methodCombo_ != nullptr && savedMethod >= 0 && savedMethod < methodCombo_->count())
         {
             methodCombo_->setCurrentIndex(savedMethod);
+        }
+
+        const auto savedShape = settings.value("shape", 0).toInt();
+        if (shapeCombo_ != nullptr && savedShape >= 0 && savedShape < shapeCombo_->count())
+        {
+            shapeCombo_->setCurrentIndex(savedShape);
         }
 
         if (settings.value("advancedExpanded", false).toBool())
@@ -1280,11 +1381,13 @@ namespace faceveil
         settings.setValue("outputDir", outputDirEdit_->text());
         settings.setValue("recursive", recursiveCheck_->isChecked());
         settings.setValue("review", reviewCheck_->isChecked());
+        settings.setValue("preserveMetadata", preserveMetaCheck_->isChecked());
         settings.setValue("scoreThreshold", scoreThresholdSpin_->value());
         settings.setValue("nmsThreshold", nmsThresholdSpin_->value());
         settings.setValue("blockSize", blockSizeSpin_->value());
         settings.setValue("padding", paddingSpin_->value());
         settings.setValue("method", methodCombo_ ? methodCombo_->currentIndex() : 0);
+        settings.setValue("shape", shapeCombo_ ? shapeCombo_->currentIndex() : 0);
         settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
 
@@ -1319,16 +1422,26 @@ namespace faceveil
 
     void MainWindow::setProcessing(bool processing) const
     {
+        if (statusLabel_->property("state").isValid())
+        {
+            statusLabel_->setProperty("state", QVariant());
+            statusLabel_->style()->unpolish(statusLabel_);
+            statusLabel_->style()->polish(statusLabel_);
+        }
+
         startButton_->setEnabled(!processing);
         stopButton_->setEnabled(processing);
         languageCombo_->setEnabled(!processing);
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
+        shapeCombo_->setEnabled(!processing);
         modelPathEdit_->setEnabled(!processing);
+        downloadButton_->setEnabled(!processing);
         outputDirEdit_->setEnabled(!processing);
         inputList_->setEnabled(!processing);
         recursiveCheck_->setEnabled(!processing);
         reviewCheck_->setEnabled(!processing);
+        preserveMetaCheck_->setEnabled(!processing);
         scoreThresholdSpin_->setEnabled(!processing);
         nmsThresholdSpin_->setEnabled(!processing);
         blockSizeSpin_->setEnabled(!processing);
@@ -1367,16 +1480,54 @@ namespace faceveil
         updateModelPathFromSelection();
     }
 
-    void MainWindow::updateModelPathFromSelection() const
+    void MainWindow::downloadSelectedModel()
     {
-        const auto path = selectedModelPath();
-        if (path.isEmpty() || QFileInfo::exists(path))
+        const auto modelPath = selectedModelPath();
+        const BuiltinModel *builtin = findBuiltinModel(modelPath);
+        if (builtin == nullptr)
         {
-            modelPathEdit_->setText(path);
+            return;
+        }
+        if (QFileInfo::exists(modelPath))
+        {
+            updateModelPathFromSelection();
+            return;
+        }
+
+        appendLog(tr("Downloading %1…").arg(builtin->fileName));
+        if (ensureBuiltinModelAvailable(this, *builtin, modelPath))
+        {
+            appendLog(tr("Model ready: %1").arg(builtin->fileName));
         }
         else
         {
-            modelPathEdit_->setText(tr("Not downloaded yet — fetched when you press Start"));
+            appendLog(tr("Model download was cancelled or failed."));
+        }
+        updateModelPathFromSelection();
+    }
+
+    void MainWindow::updateModelPathFromSelection() const
+    {
+        const auto path = selectedModelPath();
+        const bool exists = !path.isEmpty() && QFileInfo::exists(path);
+        const bool missingBuiltin = !exists && findBuiltinModel(path) != nullptr;
+
+        if (path.isEmpty() || exists)
+        {
+            modelPathEdit_->setText(path);
+        }
+        else if (missingBuiltin)
+        {
+            modelPathEdit_->setText(tr("Not downloaded yet — click Download"));
+        }
+        else
+        {
+            modelPathEdit_->setText(path);
+        }
+
+        if (downloadButton_ != nullptr)
+        {
+            downloadButton_->setVisible(missingBuiltin);
         }
     }
 
@@ -1428,6 +1579,29 @@ namespace faceveil
         const auto time = QDateTime::currentDateTime().toString("HH:mm:ss");
         logEdit_->appendPlainText(QString("[%1]  %2").arg(time, message));
         spdlog::info("{}", message.toStdString());
+    }
+
+    void MainWindow::reportValidationIssue(const QString &message, QWidget *field) const
+    {
+        statusLabel_->setProperty("state", "warning");
+        statusLabel_->style()->unpolish(statusLabel_);
+        statusLabel_->style()->polish(statusLabel_);
+        statusLabel_->setText(message);
+        appendLog(message);
+
+        if (field != nullptr)
+        {
+            field->setProperty("invalid", true);
+            field->style()->unpolish(field);
+            field->style()->polish(field);
+            QTimer::singleShot(2200, field, [field]
+            {
+                field->setProperty("invalid", QVariant());
+                field->style()->unpolish(field);
+                field->style()->polish(field);
+            });
+            field->setFocus(Qt::OtherFocusReason);
+        }
     }
 
     ReviewResult MainWindow::requestReview(const QImage &image,

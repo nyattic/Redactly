@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FaceVeil VERSION 1.0.0 LANGUAGES CXX)
+project(FaceVeil VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,6 +14,13 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 find_package(Qt6 QUIET OPTIONAL_COMPONENTS LinguistTools)
 find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
 find_package(spdlog REQUIRED)
+find_package(exiv2 CONFIG QUIET)
+if(NOT exiv2_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(EXIV2 IMPORTED_TARGET exiv2)
+    endif()
+endif()
 include(CTest)
 
 if(WIN32)
@@ -64,11 +71,13 @@ qt_add_executable(FaceVeil ${FACEVEIL_APP_OPTIONS}
     src/main.cpp
     src/MainWindow.cpp
     src/ImageScanner.cpp
+    src/ImageIo.cpp
     src/Mosaic.cpp
     src/ProcessorWorker.cpp
     src/ReviewDialog.cpp
     src/ScrfdFaceDetector.cpp
     include/faceveil/FaceDetection.hpp
+    include/faceveil/ImageIo.hpp
     include/faceveil/ImageScanner.hpp
     include/faceveil/MainWindow.hpp
     include/faceveil/Mosaic.hpp
@@ -92,6 +101,18 @@ target_link_libraries(FaceVeil PRIVATE
     onnxruntime::onnxruntime
     spdlog::spdlog
 )
+
+if(exiv2_FOUND)
+    target_link_libraries(FaceVeil PRIVATE Exiv2::exiv2lib)
+    target_compile_definitions(FaceVeil PRIVATE FACEVEIL_HAVE_EXIV2)
+    message(STATUS "FaceVeil: metadata preservation enabled (exiv2 CONFIG)")
+elseif(EXIV2_FOUND)
+    target_link_libraries(FaceVeil PRIVATE PkgConfig::EXIV2)
+    target_compile_definitions(FaceVeil PRIVATE FACEVEIL_HAVE_EXIV2)
+    message(STATUS "FaceVeil: metadata preservation enabled (exiv2 pkg-config)")
+else()
+    message(WARNING "exiv2 not found; building without metadata preservation.")
+endif()
 
 if(Qt6LinguistTools_FOUND)
     qt_add_translations(FaceVeil
@@ -161,8 +182,10 @@ if(BUILD_TESTING)
     add_executable(faceveil_tests
         tests/test_core.cpp
         src/ImageScanner.cpp
+        src/ImageIo.cpp
         src/Mosaic.cpp
         include/faceveil/FaceDetection.hpp
+        include/faceveil/ImageIo.hpp
         include/faceveil/ImageScanner.hpp
         include/faceveil/Mosaic.hpp
     )
@@ -171,5 +194,12 @@ if(BUILD_TESTING)
         Qt6::Core
         ${OpenCV_LIBS}
     )
+    if(exiv2_FOUND)
+        target_link_libraries(faceveil_tests PRIVATE Exiv2::exiv2lib)
+        target_compile_definitions(faceveil_tests PRIVATE FACEVEIL_HAVE_EXIV2)
+    elseif(EXIV2_FOUND)
+        target_link_libraries(faceveil_tests PRIVATE PkgConfig::EXIV2)
+        target_compile_definitions(faceveil_tests PRIVATE FACEVEIL_HAVE_EXIV2)
+    endif()
     add_test(NAME faceveil_tests COMMAND faceveil_tests)
 endif()

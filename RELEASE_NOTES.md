@@ -1,3 +1,25 @@
+# FaceVeil 1.1.0
+
+Adds full metadata and quality preservation for photographers, a rounded mask
+shape, a clearer model-download flow, and inline validation. FaceVeil's own
+license moves to the GPL v3.0-or-later.
+
+## License
+- **The application source code is now under the GNU General Public License v3.0 or later (previously PolyForm Noncommercial 1.0.0).** You may use, study, share, and modify FaceVeil — including commercially — provided that distributed copies and derivatives remain under the GPL with corresponding source available. The change is required because FaceVeil now links **Exiv2** (GPL-2.0-or-later) for metadata handling. Versions released earlier under PolyForm Noncommercial remain under that license.
+
+## Features
+- **Preserve original metadata** (Output → checkbox, off by default). When on, FaceVeil copies EXIF / IPTC / XMP and the ICC color profile from the original, and keeps the original format and bit depth at maximum quality — ideal for archiving high-resolution photos. When off, output carries no metadata (GPS, camera, and timestamps are stripped) for privacy.
+- **Lossless / maximum-quality encoding**: JPEG is written at quality 100 with no chroma subsampling; PNG, WebP, and TIFF are written losslessly. 16-bit and alpha channels are preserved.
+- **Mask shape** (Advanced): **Rectangle** or **Rounded (ellipse)** that follows the face and leaves corners untouched.
+- **Download button** for built-in models: a model that isn't on disk shows a Download button next to its path, so you no longer have to press Start to trigger the download.
+- Inline validation: missing model / inputs / output folder are now flagged in the status bar and on the offending field, not just in the log.
+- Empty-state hint in the input list, and a tidied header layout.
+
+## Notes
+- **"Copy Original"** in review now makes a byte-exact copy of the source when *Preserve original metadata* is on (no re-encode); with the option off it re-encodes at maximum quality without metadata.
+
+---
+
 # FaceVeil 1.0.0
 
 The first 1.0 release. FaceVeil is now licensed for noncommercial use, speaks English and Korean, fetches its face-detection models on first use instead of bundling them, works with current ONNX Runtime, and adds new anonymization styles, a run summary, and diagnostic logging.

@@ -2,6 +2,10 @@ param(
     [string]$QtRoot = $env:QT_ROOT,
     [string]$OpenCvRoot = $env:OpenCV_DIR,
     [string]$OnnxRuntimeRoot = $env:ONNXRUNTIME_ROOT,
+    # Optional. Root of an Exiv2 install (e.g. a vcpkg installed\x64-windows tree,
+    # or an Exiv2 CMake package dir). Enables metadata preservation. When omitted,
+    # FaceVeil still builds, but the "Preserve original metadata" option is inert.
+    [string]$Exiv2Root = $env:EXIV2_ROOT,
     [string]$Generator = "Ninja",
     [string]$BuildType = "Release"
 )
@@ -66,19 +70,34 @@ if (-not $OnnxRuntimeRoot -or -not (Test-Path $OnnxRuntimeRoot)) {
 $OpenCvRoot = (Resolve-Path $OpenCvRoot).Path
 $OnnxRuntimeRoot = (Resolve-Path $OnnxRuntimeRoot).Path
 
+$PrefixPaths = @($QtRoot, $OpenCvRoot)
+if ($Exiv2Root -and (Test-Path $Exiv2Root)) {
+    $Exiv2Root = (Resolve-Path $Exiv2Root).Path
+    $PrefixPaths += $Exiv2Root
+} else {
+    if ($Exiv2Root) {
+        Write-Warning "Exiv2Root '$Exiv2Root' does not exist; building without metadata preservation."
+    } else {
+        Write-Host "Exiv2Root not set; building without metadata preservation (the option will be inert)."
+    }
+    $Exiv2Root = $null
+}
+
 Write-Host "Qt root:          $QtRoot"
 Write-Host "OpenCV root:      $OpenCvRoot"
 Write-Host "ONNX Runtime:     $OnnxRuntimeRoot"
+Write-Host "Exiv2 root:       $(if ($Exiv2Root) { $Exiv2Root } else { '(not provided)' })"
 
 # ── Configure + build ──────────────────────────────────────────────
 # Note: every -D argument is wrapped in double quotes so PowerShell
 # interpolates $vars. Bare `-DKEY=$var` is parsed as a parameter-style
 # token and passed through literally — which previously poisoned the
 # CMake cache with strings like "$BuildType" and broke the ninja build.
+$PrefixPathArg = ($PrefixPaths -join ";")
 cmake -S $RootDir -B $BuildDir `
     -G $Generator `
     "-DCMAKE_BUILD_TYPE=$BuildType" `
-    "-DCMAKE_PREFIX_PATH=$QtRoot;$OpenCvRoot" `
+    "-DCMAKE_PREFIX_PATH=$PrefixPathArg" `
     "-DONNXRUNTIME_ROOT=$OnnxRuntimeRoot" `
     "-DCMAKE_CXX_SCAN_FOR_MODULES=OFF"
 if ($LASTEXITCODE -ne 0) { throw "CMake configure failed (exit $LASTEXITCODE)" }
@@ -154,6 +173,54 @@ if ($worldDlls) {
         Copy-Item $dll.FullName $DistDir -Force
     }
     Write-Host "Bundled $(@($moduleDlls).Count) OpenCV module DLL(s)."
+}
+
+# ── Exiv2 + its dependency DLLs ────────────────────────────────────
+# Only when an Exiv2 root was provided (metadata preservation enabled).
+# vcpkg lays out exiv2.dll and its dependency DLLs (expat, brotli*, zlib1,
+# libintl/intl, inih) together under installed\x64-windows\bin, so we copy
+# exiv2.dll plus the known dependency DLLs found beside it.
+if ($Exiv2Root) {
+    $exiv2SearchRoots = @(
+        $Exiv2Root,
+        (Join-Path $Exiv2Root "bin"),
+        (Join-Path $Exiv2Root "installed/x64-windows/bin")
+    ) | Where-Object { Test-Path $_ } | ForEach-Object { (Resolve-Path $_).Path } | Select-Object -Unique
+
+    $exiv2Dll = foreach ($root in $exiv2SearchRoots) {
+        Get-ChildItem -Path $root -Recurse -Filter "exiv2.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    $exiv2Dll = @($exiv2Dll) | Select-Object -First 1
+
+    if (-not $exiv2Dll) {
+        Write-Warning "Exiv2Root was provided but exiv2.dll was not found under $($exiv2SearchRoots -join ', '); metadata preservation may be unavailable at runtime."
+    } else {
+        $exiv2BinDir = Split-Path $exiv2Dll.FullName -Parent
+        Copy-Item $exiv2Dll.FullName $DistDir -Force
+        Write-Host "Bundled: $($exiv2Dll.FullName)"
+
+        # Copy dependency DLLs that sit next to exiv2.dll. Match on name so we
+        # don't sweep in unrelated files from a shared bin directory.
+        $depPatterns = @(
+            "libexiv2*.dll", "expat*.dll", "libexpat*.dll",
+            "brotli*.dll", "libbrotli*.dll",
+            "zlib*.dll", "zlib1.dll",
+            "intl*.dll", "libintl*.dll", "libcharset*.dll", "iconv*.dll", "libiconv*.dll",
+            "inih*.dll", "libinih*.dll", "INIReader*.dll", "libINIReader*.dll"
+        )
+        $copiedDeps = 0
+        foreach ($pattern in $depPatterns) {
+            Get-ChildItem -Path $exiv2BinDir -Filter $pattern -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notmatch 'd\.dll$' } |
+                ForEach-Object {
+                    if (-not (Test-Path (Join-Path $DistDir $_.Name))) {
+                        Copy-Item $_.FullName $DistDir -Force
+                        $copiedDeps++
+                    }
+                }
+        }
+        Write-Host "Bundled $copiedDeps Exiv2 dependency DLL(s)."
+    }
 }
 
 # ── Third-party notices + license ──────────────────────────────────

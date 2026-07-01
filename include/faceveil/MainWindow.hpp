@@ -56,6 +56,8 @@ namespace faceveil
     private slots:
         void chooseModel();
 
+        void downloadSelectedModel();
+
         void chooseFiles();
 
         void chooseFolder();
@@ -87,6 +89,8 @@ namespace faceveil
 
         void appendLog(const QString &message) const;
 
+        void reportValidationIssue(const QString &message, QWidget *field = nullptr) const;
+
         void loadSettings();
 
         void saveSettings() const;
@@ -99,12 +103,15 @@ namespace faceveil
 
         QComboBox *modelCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
+        QComboBox *shapeCombo_ = nullptr;
         QComboBox *languageCombo_ = nullptr;
         QLineEdit *modelPathEdit_ = nullptr;
+        QPushButton *downloadButton_ = nullptr;
         QLineEdit *outputDirEdit_ = nullptr;
         QListWidget *inputList_ = nullptr;
         QCheckBox *recursiveCheck_ = nullptr;
         QCheckBox *reviewCheck_ = nullptr;
+        QCheckBox *preserveMetaCheck_ = nullptr;
         QDoubleSpinBox *scoreThresholdSpin_ = nullptr;
         QDoubleSpinBox *nmsThresholdSpin_ = nullptr;
         QSpinBox *blockSizeSpin_ = nullptr;

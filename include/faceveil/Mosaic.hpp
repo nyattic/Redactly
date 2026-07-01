@@ -13,8 +13,15 @@ namespace faceveil
         Fill,
     };
 
+    enum class MaskShape
+    {
+        Rectangle,
+        Ellipse,
+    };
+
     void applyAnonymization(cv::Mat &image, const FaceDetections &detections,
-                            AnonymizationMethod method, int blockSize, float paddingRatio);
+                            AnonymizationMethod method, int blockSize, float paddingRatio,
+                            MaskShape shape = MaskShape::Rectangle);
 
     void applyMosaic(cv::Mat &image, const FaceDetections &detections,
                      int blockSize, float paddingRatio);
