@@ -8,34 +8,39 @@
 #include <string>
 #include <vector>
 
-namespace {
-
-std::string shapeToString(const std::vector<int64_t>& shape) {
-    std::string result = "[";
-    for (size_t i = 0; i < shape.size(); ++i) {
-        if (i > 0) {
-            result += ", ";
+namespace
+{
+    std::string shapeToString(const std::vector<int64_t> &shape)
+    {
+        std::string result = "[";
+        for (size_t i = 0; i < shape.size(); ++i)
+        {
+            if (i > 0)
+            {
+                result += ", ";
+            }
+            result += std::to_string(shape[i]);
         }
-        result += std::to_string(shape[i]);
+        result += "]";
+        return result;
     }
-    result += "]";
-    return result;
 }
 
-}
-
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     auto logger = std::make_shared<spdlog::logger>(
         "inspect", std::make_shared<spdlog::sinks::stdout_sink_mt>());
     logger->set_pattern("%v");
     spdlog::set_default_logger(logger);
 
-    if (argc != 2) {
+    if (argc != 2)
+    {
         spdlog::error("Usage: faceveil_inspect_model <model.onnx>");
         return 2;
     }
 
-    try {
+    try
+    {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "FaceVeilInspect");
         Ort::SessionOptions options;
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
@@ -45,7 +50,8 @@ int main(int argc, char* argv[]) {
         Ort::AllocatorWithDefaultOptions allocator;
 
         spdlog::info("Inputs");
-        for (size_t i = 0; i < session.GetInputCount(); ++i) {
+        for (size_t i = 0; i < session.GetInputCount(); ++i)
+        {
             auto name = session.GetInputNameAllocated(i, allocator);
             const auto typeInfo = session.GetInputTypeInfo(i);
             const auto info = typeInfo.GetTensorTypeAndShapeInfo();
@@ -53,13 +59,16 @@ int main(int argc, char* argv[]) {
         }
 
         spdlog::info("Outputs");
-        for (size_t i = 0; i < session.GetOutputCount(); ++i) {
+        for (size_t i = 0; i < session.GetOutputCount(); ++i)
+        {
             auto name = session.GetOutputNameAllocated(i, allocator);
             const auto typeInfo = session.GetOutputTypeInfo(i);
             const auto info = typeInfo.GetTensorTypeAndShapeInfo();
             spdlog::info("  {} {}", name.get(), shapeToString(info.GetShape()));
         }
-    } catch (const std::exception& exception) {
+    }
+    catch (const std::exception &exception)
+    {
         spdlog::error("Error: {}", exception.what());
         return 1;
     }
