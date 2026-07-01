@@ -19,6 +19,10 @@
 #include <memory>
 #include <vector>
 
+#ifndef FACEVEIL_VERSION
+#define FACEVEIL_VERSION "0.0.0"
+#endif
+
 namespace
 {
     void applyLightPalette(QApplication &app)
@@ -79,6 +83,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName("FaceVeil");
     QCoreApplication::setOrganizationDomain("faceveil.app");
     QCoreApplication::setApplicationName("FaceVeil");
+    QCoreApplication::setApplicationVersion(FACEVEIL_VERSION);
 
     setupLogging();
 

@@ -362,11 +362,21 @@ namespace faceveil
         headerLayout->setContentsMargins(0, 0, 0, 0);
         headerLayout->setSpacing(4);
 
+        auto *titleRow = new QHBoxLayout();
+        titleRow->setContentsMargins(0, 0, 0, 0);
+        titleRow->setSpacing(8);
         auto *title = new QLabel("FaceVeil", header);
         title->setObjectName("titleLabel");
+        auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
+        versionLabel->setObjectName("subtitleLabel");
+        versionLabel->setAlignment(Qt::AlignRight | Qt::AlignBottom);
+        titleRow->addWidget(title);
+        titleRow->addStretch(1);
+        titleRow->addWidget(versionLabel);
+
         auto *subtitle = new QLabel("Local, private face anonymization for photos", header);
         subtitle->setObjectName("subtitleLabel");
-        headerLayout->addWidget(title);
+        headerLayout->addLayout(titleRow);
         headerLayout->addWidget(subtitle);
         root->addWidget(header);
 

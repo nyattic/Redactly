@@ -1,3 +1,29 @@
+# FaceVeil 1.0.0
+
+The first 1.0 release. FaceVeil is now licensed for noncommercial use, works with current ONNX Runtime, and adds new anonymization styles, a run summary, and diagnostic logging.
+
+## License
+- **The application source code is now under the PolyForm Noncommercial License 1.0.0 (previously MIT).** Personal and other noncommercial use is permitted; commercial use is not. Versions released earlier under MIT remain MIT.
+
+## Fixes
+- Fixed a startup failure on ONNX Runtime 1.27+ where a dangling type-info view made every model load fail with "input must be a float tensor"
+- SCRFD outputs are now matched by tensor shape and per-stride anchor count instead of output order, so compatible models decode reliably and an incompatible model fails loudly instead of silently skipping faces
+
+## Features
+- Anonymization style selector: **Mosaic** (pixelate), **Gaussian blur**, or **Solid fill** (blackout)
+- End-of-run summary reporting anonymized / copied / skipped / failed counts
+- The current version is shown in the app header
+
+## Logging
+- Logging now runs through spdlog: colored console output plus a rotating log file under the platform data directory (`~/Library/Application Support/FaceVeil/logs` on macOS)
+
+## Download
+
+- **macOS (Apple Silicon)** — `FaceVeil-1.0.0-arm64.dmg`, signed and notarized. Requires macOS 12+.
+- **Windows (x64)** — `FaceVeil-1.0.0-windows-x64.zip`. Unzip and run `FaceVeil.exe`. Requires Windows 10 or later.
+
+---
+
 # FaceVeil 0.1.2
 
 A maintenance release focused on safer batch processing, clearer review behavior, and basic automated test coverage.
