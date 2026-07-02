@@ -227,12 +227,9 @@ On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preser
         <translation>기본값으로 초기화</translation>
     </message>
     <message>
-        <source>Check for updates on startup</source>
-        <translation>시작 시 업데이트 확인</translation>
-    </message>
-    <message>
-        <source>Checks whether a new version is available at startup.</source>
-        <translation>시작할 때 새로운 버전이 있는지 확인합니다.</translation>
+        <location filename="../src/MainWindow.cpp" line="457"/>
+        <source>Settings</source>
+        <translation>설정</translation>
     </message>
     <message>
         <source>Update available: %1</source>
@@ -744,6 +741,49 @@ Rounded = elliptical mask that follows the face and leaves corners untouched. De
         <location filename="../src/ReviewDialog.cpp" line="416"/>
         <source>Save &amp;&amp; Next</source>
         <translation>저장 후 다음</translation>
+    </message>
+</context>
+<context>
+    <name>redactly::SettingsDialog</name>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="78"/>
+        <source>Settings</source>
+        <translation>설정</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="79"/>
+        <source>Theme</source>
+        <translation>테마</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="80"/>
+        <source>Language</source>
+        <translation>언어</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="81"/>
+        <source>System</source>
+        <translation>시스템</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="82"/>
+        <source>Light</source>
+        <translation>라이트</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="83"/>
+        <source>Dark</source>
+        <translation>다크</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="84"/>
+        <source>Check for updates on startup</source>
+        <translation>시작 시 업데이트 확인</translation>
+    </message>
+    <message>
+        <location filename="../src/SettingsDialog.cpp" line="87"/>
+        <source>Close</source>
+        <translation>닫기</translation>
     </message>
 </context>
 </TS>

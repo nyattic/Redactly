@@ -1,6 +1,7 @@
 #pragma once
 
 #include "redactly/ReviewTypes.hpp"
+#include "redactly/Theme.hpp"
 
 #include <QMainWindow>
 #include <QTranslator>
@@ -75,6 +76,8 @@ namespace redactly
 
         void resetAdvancedDefaults() const;
 
+        void openSettings();
+
     private:
         void addInputPath(const QString &path) const;
 
@@ -108,7 +111,7 @@ namespace redactly
         QComboBox *detectCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
         QComboBox *shapeCombo_ = nullptr;
-        QComboBox *languageCombo_ = nullptr;
+        QToolButton *settingsButton_ = nullptr;
         QLineEdit *modelPathEdit_ = nullptr;
         QPushButton *downloadButton_ = nullptr;
         QLineEdit *outputDirEdit_ = nullptr;
@@ -116,7 +119,6 @@ namespace redactly
         QCheckBox *recursiveCheck_ = nullptr;
         QCheckBox *reviewCheck_ = nullptr;
         QCheckBox *preserveMetaCheck_ = nullptr;
-        QCheckBox *updateCheck_ = nullptr;
         QLabel *updateLabel_ = nullptr;
         QDoubleSpinBox *scoreThresholdSpin_ = nullptr;
         QDoubleSpinBox *nmsThresholdSpin_ = nullptr;
@@ -140,6 +142,8 @@ namespace redactly
 
         QTranslator translator_;
         QString language_;
+        ThemeMode themeMode_ = ThemeMode::System;
+        bool checkForUpdatesOnStartup_ = true;
         std::vector<std::function<void()>> retranslators_;
     };
 }

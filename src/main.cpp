@@ -1,12 +1,13 @@
 #include "redactly/MainWindow.hpp"
 #include "redactly/ReviewTypes.hpp"
+#include "redactly/Theme.hpp"
 
 #include <QApplication>
 #include <QDir>
 #include <QFont>
 #include <QMetaType>
-#include <QPalette>
 #include <QRectF>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QStyleFactory>
 #include <QVector>
@@ -25,25 +26,6 @@
 
 namespace
 {
-    void applyLightPalette(QApplication &app)
-    {
-        QPalette palette;
-        palette.setColor(QPalette::Window, QColor("#F7F8FA"));
-        palette.setColor(QPalette::WindowText, QColor("#111827"));
-        palette.setColor(QPalette::Base, QColor("#FFFFFF"));
-        palette.setColor(QPalette::AlternateBase, QColor("#F3F4F6"));
-        palette.setColor(QPalette::Text, QColor("#111827"));
-        palette.setColor(QPalette::Button, QColor("#FFFFFF"));
-        palette.setColor(QPalette::ButtonText, QColor("#111827"));
-        palette.setColor(QPalette::Highlight, QColor("#111827"));
-        palette.setColor(QPalette::HighlightedText, QColor("#FFFFFF"));
-        palette.setColor(QPalette::PlaceholderText, QColor("#9CA3AF"));
-        palette.setColor(QPalette::Disabled, QPalette::Text, QColor("#9CA3AF"));
-        palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor("#9CA3AF"));
-        palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor("#9CA3AF"));
-        app.setPalette(palette);
-    }
-
     void setupLogging()
     {
         try
@@ -88,7 +70,11 @@ int main(int argc, char *argv[])
     setupLogging();
 
     QApplication::setStyle(QStyleFactory::create("Fusion"));
-    applyLightPalette(app);
+    {
+        QSettings settings;
+        const auto mode = redactly::themeModeFromString(settings.value("theme", "system").toString());
+        redactly::applyTheme(app, mode);
+    }
 
     qRegisterMetaType<redactly::ReviewResult>("redactly::ReviewResult");
     qRegisterMetaType<QVector<QRectF> >("QVector<QRectF>");

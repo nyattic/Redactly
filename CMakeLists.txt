@@ -100,18 +100,24 @@ qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
     src/ProcessorWorker.cpp
     src/ReviewDialog.cpp
     src/ScrfdFaceDetector.cpp
+    src/SettingsDialog.cpp
+    src/Theme.cpp
     src/UpdateChecker.cpp
+    include/redactly/DetectionGeometry.hpp
     include/redactly/Detector.hpp
     include/redactly/FaceDetection.hpp
     include/redactly/ImageIo.hpp
     include/redactly/ImageScanner.hpp
     include/redactly/MainWindow.hpp
     include/redactly/Mosaic.hpp
+    include/redactly/PathSafety.hpp
     include/redactly/PlateDetector.hpp
     include/redactly/ProcessorWorker.hpp
     include/redactly/ReviewDialog.hpp
     include/redactly/ReviewTypes.hpp
     include/redactly/ScrfdFaceDetector.hpp
+    include/redactly/SettingsDialog.hpp
+    include/redactly/Theme.hpp
     include/redactly/UpdateChecker.hpp
     ${REDACTLY_APP_RESOURCES}
 )

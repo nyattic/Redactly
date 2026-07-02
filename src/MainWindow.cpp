@@ -4,6 +4,8 @@
 #include "redactly/ProcessorWorker.hpp"
 #include "redactly/ReviewDialog.hpp"
 #include "redactly/ScrfdFaceDetector.hpp"
+#include "redactly/SettingsDialog.hpp"
+#include "redactly/Theme.hpp"
 #include "redactly/UpdateChecker.hpp"
 
 #include <QApplication>
@@ -46,6 +48,7 @@
 #include <QPaintEvent>
 #include <QProgressDialog>
 #include <QStyle>
+#include <QStyleHints>
 #include <QTimer>
 
 #include <spdlog/spdlog.h>
@@ -56,203 +59,6 @@ namespace redactly
 {
     namespace
     {
-        constexpr const char *kStyleSheet = R"(
-            QWidget {
-                color: #111827;
-                font-size: 13px;
-            }
-            QMainWindow, #rootScroll, #rootScroll > QWidget > QWidget {
-                background-color: #F7F8FA;
-            }
-            QLabel#titleLabel {
-                font-size: 22px;
-                font-weight: 600;
-                color: #111827;
-            }
-            QLabel#subtitleLabel {
-                font-size: 12px;
-                color: #6B7280;
-            }
-            QLabel[role="sectionTitle"] {
-                font-size: 13px;
-                font-weight: 600;
-                color: #111827;
-                letter-spacing: 0.2px;
-            }
-            QLabel[role="sectionHint"] {
-                font-size: 12px;
-                color: #6B7280;
-            }
-            QLabel[role="fieldLabel"] {
-                font-size: 12px;
-                color: #4B5563;
-            }
-            QFrame#card {
-                background-color: #FFFFFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 12px;
-            }
-            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-                background-color: #FFFFFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 6px 10px;
-                min-height: 20px;
-                selection-background-color: #111827;
-                selection-color: #FFFFFF;
-            }
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-                border: 1px solid #111827;
-            }
-            QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
-                background-color: #F3F4F6;
-                color: #9CA3AF;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 22px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid #6B7280;
-                margin-right: 10px;
-            }
-            QPushButton {
-                background-color: #FFFFFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 7px 14px;
-                color: #111827;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #F3F4F6;
-                border-color: #D1D5DB;
-            }
-            QPushButton:pressed {
-                background-color: #E5E7EB;
-            }
-            QPushButton:disabled {
-                color: #9CA3AF;
-                background-color: #F9FAFB;
-                border-color: #E5E7EB;
-            }
-            QPushButton#primaryButton {
-                background-color: #111827;
-                color: #FFFFFF;
-                border: 1px solid #111827;
-                padding: 9px 20px;
-                font-weight: 600;
-            }
-            QPushButton#primaryButton:hover {
-                background-color: #1F2937;
-            }
-            QPushButton#primaryButton:pressed {
-                background-color: #000000;
-            }
-            QPushButton#primaryButton:disabled {
-                background-color: #9CA3AF;
-                border-color: #9CA3AF;
-                color: #FFFFFF;
-            }
-            QPushButton#dangerButton {
-                background-color: #FFFFFF;
-                color: #DC2626;
-                border: 1px solid #FECACA;
-            }
-            QPushButton#dangerButton:hover {
-                background-color: #FEF2F2;
-            }
-            QPushButton#dangerButton:disabled {
-                color: #9CA3AF;
-                border-color: #E5E7EB;
-            }
-            QListWidget, QPlainTextEdit {
-                background-color: #FFFFFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 8px;
-                padding: 4px;
-            }
-            QListWidget::item {
-                padding: 6px 8px;
-                border-radius: 4px;
-            }
-            QListWidget::item:selected {
-                background-color: #F3F4F6;
-                color: #111827;
-            }
-            QPlainTextEdit {
-                font-family: "SF Mono", "Menlo", "Consolas", monospace;
-                font-size: 12px;
-                color: #374151;
-            }
-            QCheckBox {
-                spacing: 8px;
-                color: #111827;
-            }
-            QProgressBar {
-                background-color: #F3F4F6;
-                border: none;
-                border-radius: 4px;
-                height: 8px;
-                text-align: center;
-                color: transparent;
-            }
-            QProgressBar::chunk {
-                background-color: #111827;
-                border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background: transparent;
-                width: 10px;
-                margin: 2px;
-            }
-            QScrollBar::handle:vertical {
-                background: #D1D5DB;
-                border-radius: 4px;
-                min-height: 24px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #9CA3AF;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0;
-            }
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QWidget#bottomBar {
-                background-color: #FFFFFF;
-                border-top: 1px solid #E5E7EB;
-            }
-            QLabel#statusLabel {
-                color: #6B7280;
-                font-size: 12px;
-            }
-            QLabel#statusLabel[state="warning"] {
-                color: #DC2626;
-                font-weight: 600;
-            }
-            QLineEdit[invalid="true"], QComboBox[invalid="true"],
-            QListWidget[invalid="true"] {
-                border: 1px solid #DC2626;
-            }
-            QToolButton#advancedToggle {
-                background: transparent;
-                border: none;
-                padding: 4px 2px;
-                font-size: 13px;
-                font-weight: 600;
-                color: #111827;
-            }
-            QToolButton#advancedToggle:hover {
-                color: #374151;
-            }
-        )";
-
         constexpr double kDefaultScoreThreshold = 0.5;
         constexpr double kDefaultNmsThreshold = 0.4;
         constexpr int kDefaultBlockSize = 14;
@@ -589,7 +395,6 @@ namespace redactly
         setAcceptDrops(true);
         resize(920, 760);
         setMinimumSize(720, 600);
-        setStyleSheet(kStyleSheet);
 
         auto *container = new QWidget(this);
         auto *containerLayout = new QVBoxLayout(container);
@@ -618,20 +423,13 @@ namespace redactly
         auto *title = new QLabel("Redactly", header);
         title->setObjectName("titleLabel");
 
-        languageCombo_ = new QComboBox(header);
-        languageCombo_->addItem("English", "en");
-        languageCombo_->addItem("한국어", "ko");
-        languageCombo_->setFocusPolicy(Qt::NoFocus);
-        languageCombo_->setCursor(Qt::PointingHandCursor);
-        connect(languageCombo_, &QComboBox::currentIndexChanged, this, [this]
-        {
-            const auto language = languageCombo_->currentData().toString();
-            if (language != language_)
-            {
-                applyLanguage(language);
-                saveSettings();
-            }
-        });
+        settingsButton_ = new QToolButton(header);
+        settingsButton_->setObjectName("settingsButton");
+        settingsButton_->setText(QStringLiteral("⚙"));
+        settingsButton_->setFocusPolicy(Qt::NoFocus);
+        settingsButton_->setCursor(Qt::PointingHandCursor);
+        addRetranslation([this]{ settingsButton_->setToolTip(tr("Settings")); });
+        connect(settingsButton_, &QToolButton::clicked, this, &MainWindow::openSettings);
 
         auto *versionLabel = new QLabel(QString("v%1").arg(QCoreApplication::applicationVersion()), header);
         versionLabel->setObjectName("subtitleLabel");
@@ -652,7 +450,7 @@ namespace redactly
 
         titleRow->addWidget(titleGroup, 0, Qt::AlignVCenter);
         titleRow->addStretch(1);
-        titleRow->addWidget(languageCombo_, 0, Qt::AlignVCenter);
+        titleRow->addWidget(settingsButton_, 0, Qt::AlignVCenter);
 
         auto *subtitle = new QLabel(header);
         subtitle->setObjectName("subtitleLabel");
@@ -981,15 +779,6 @@ namespace redactly
             grid->addRow(paddingLabel, paddingSpin_);
             bodyLayout->addLayout(grid);
 
-            updateCheck_ = new QCheckBox(advancedBody_);
-            updateCheck_->setChecked(true);
-            addRetranslation([this]{ updateCheck_->setText(tr("Check for updates on startup")); });
-            addRetranslation([this]
-                             {
-                                 updateCheck_->setToolTip(tr("Checks whether a new version is available at startup."));
-                             });
-            bodyLayout->addWidget(updateCheck_);
-
             advancedBody_->setVisible(false);
             cardLayout->addWidget(advancedBody_);
 
@@ -1065,6 +854,16 @@ namespace redactly
         populateBundledModels();
         loadSettings();
         appendLog(tr("Ready. Drop images or folders to begin."));
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+        connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme)
+        {
+            if (themeMode_ == ThemeMode::System)
+            {
+                applyTheme(*qApp, ThemeMode::System);
+            }
+        });
+#endif
 
         checkForUpdates();
     }
@@ -1473,23 +1272,14 @@ namespace redactly
         }
         settings.endGroup();
 
-        if (updateCheck_ != nullptr)
-        {
-            updateCheck_->setChecked(settings.value("checkForUpdates", true).toBool());
-        }
+        themeMode_ = themeModeFromString(settings.value("theme", "system").toString());
+        checkForUpdatesOnStartup_ = settings.value("checkForUpdates", true).toBool();
 
         const auto savedLanguage = settings.value("language").toString();
         QString language = savedLanguage;
         if (language.isEmpty())
         {
             language = (QLocale::system().language() == QLocale::Korean) ? QStringLiteral("ko") : QStringLiteral("en");
-        }
-        if (languageCombo_ != nullptr)
-        {
-            languageCombo_->blockSignals(true);
-            const int languageIndex = languageCombo_->findData(language);
-            languageCombo_->setCurrentIndex(languageIndex >= 0 ? languageIndex : 0);
-            languageCombo_->blockSignals(false);
         }
         applyLanguage(language);
 
@@ -1530,14 +1320,15 @@ namespace redactly
         settings.setValue("advancedExpanded", advancedToggle_ ? advancedToggle_->isChecked() : false);
         settings.endGroup();
 
-        settings.setValue("checkForUpdates", updateCheck_ ? updateCheck_->isChecked() : true);
+        settings.setValue("theme", themeModeToString(themeMode_));
+        settings.setValue("checkForUpdates", checkForUpdatesOnStartup_);
 
         settings.setValue("language", language_);
     }
 
     void MainWindow::checkForUpdates()
     {
-        if (updateCheck_ == nullptr || !updateCheck_->isChecked())
+        if (!checkForUpdatesOnStartup_)
         {
             return;
         }
@@ -1556,6 +1347,33 @@ namespace redactly
                     updateLabel_->setVisible(true);
                 });
         checker->check();
+    }
+
+    void MainWindow::openSettings()
+    {
+        SettingsDialog dialog(themeMode_, language_, checkForUpdatesOnStartup_, this);
+
+        connect(&dialog, &SettingsDialog::themeChanged, this, [this](ThemeMode mode)
+        {
+            themeMode_ = mode;
+            applyTheme(*qApp, mode);
+            saveSettings();
+        });
+        connect(&dialog, &SettingsDialog::languageChanged, this, [this](const QString &language)
+        {
+            if (language != language_)
+            {
+                applyLanguage(language);
+                saveSettings();
+            }
+        });
+        connect(&dialog, &SettingsDialog::checkForUpdatesChanged, this, [this](bool enabled)
+        {
+            checkForUpdatesOnStartup_ = enabled;
+            saveSettings();
+        });
+
+        dialog.exec();
     }
 
     void MainWindow::addInputPath(const QString &path) const
@@ -1595,7 +1413,7 @@ namespace redactly
 
         startButton_->setEnabled(!processing);
         stopButton_->setEnabled(processing);
-        languageCombo_->setEnabled(!processing);
+        settingsButton_->setEnabled(!processing);
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
         shapeCombo_->setEnabled(!processing);
