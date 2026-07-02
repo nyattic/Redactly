@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QIcon>
 #include <QString>
 
 class QApplication;
@@ -20,4 +21,6 @@ namespace redactly
     bool systemPrefersDark();
 
     void applyTheme(QApplication &app, ThemeMode mode);
+
+    QIcon settingsGearIcon(ThemeMode mode);
 }

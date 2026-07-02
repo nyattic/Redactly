@@ -1,3 +1,12 @@
+# Redactly 1.5.0
+
+Adds a light/dark theme. A new **Settings** dialog — opened from the gear
+button in the header — lets you pick **System**, **Light**, or **Dark**;
+System follows the OS appearance and switches live when it changes. The
+language and startup update-check options now live in this dialog too.
+
+---
+
 # Redactly 1.4.0
 
 The app is now called **Redactly** (formerly FaceVeil), reflecting that it

@@ -6,6 +6,13 @@
 #include <QPalette>
 #include <QStyleHints>
 
+#ifdef REDACTLY_HAVE_SVG
+#include <QPainter>
+#include <QPixmap>
+#include <QSize>
+#include <QSvgRenderer>
+#endif
+
 namespace redactly
 {
     namespace
@@ -358,11 +365,12 @@ namespace redactly
             QToolButton#settingsButton {
                 background: transparent;
                 border: none;
-                padding: 2px 6px;
-                font-size: 16px;
+                border-radius: 8px;
+                font-size: 22px;
                 color: @subtext@;
             }
             QToolButton#settingsButton:hover {
+                background-color: @buttonHoverBg@;
                 color: @text@;
             }
         )");
@@ -506,5 +514,41 @@ namespace redactly
         const ThemeColors colors = dark ? darkColors() : lightColors();
         app.setPalette(dark ? darkPalette() : lightPalette());
         app.setStyleSheet(buildStyleSheet(colors));
+    }
+
+    QIcon settingsGearIcon(ThemeMode mode)
+    {
+#ifdef REDACTLY_HAVE_SVG
+        const bool dark = (mode == ThemeMode::Dark) ||
+                          (mode == ThemeMode::System && systemPrefersDark());
+        const QString color = dark ? QStringLiteral("#8B949E") : QStringLiteral("#6B7280");
+        const QString svg = QStringLiteral(
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' "
+            "stroke='%1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
+            "<circle cx='12' cy='12' r='3'/>"
+            "<path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06"
+            "a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09"
+            "A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06"
+            "a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"
+            "A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06"
+            "a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09"
+            "a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06"
+            "a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09"
+            "a1.65 1.65 0 0 0-1.51 1z'/></svg>").arg(color);
+
+        constexpr int logical = 20;
+        constexpr qreal dpr = 2.0;
+        QPixmap pixmap(QSize(logical, logical) * dpr);
+        pixmap.fill(Qt::transparent);
+        QSvgRenderer renderer(svg.toUtf8());
+        QPainter painter(&pixmap);
+        renderer.render(&painter);
+        painter.end();
+        pixmap.setDevicePixelRatio(dpr);
+        return QIcon(pixmap);
+#else
+        Q_UNUSED(mode);
+        return {};
+#endif
     }
 }

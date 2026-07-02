@@ -89,6 +89,8 @@ namespace redactly
 
         void setProcessing(bool processing) const;
 
+        void updateSettingsIcon() const;
+
         [[nodiscard]] QStringList inputPaths() const;
 
         void appendLog(const QString &message) const;

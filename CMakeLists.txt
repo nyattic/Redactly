@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Redactly VERSION 1.4.0 LANGUAGES CXX)
+project(Redactly VERSION 1.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,7 +11,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
-find_package(Qt6 QUIET OPTIONAL_COMPONENTS LinguistTools)
+find_package(Qt6 QUIET OPTIONAL_COMPONENTS LinguistTools Svg)
 find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
 find_package(spdlog REQUIRED)
 find_package(exiv2 CONFIG QUIET)
@@ -144,6 +144,14 @@ else()
     message(WARNING "exiv2 not found; building without metadata preservation.")
 endif()
 
+if(TARGET Qt6::Svg)
+    target_link_libraries(Redactly PRIVATE Qt6::Svg)
+    target_compile_definitions(Redactly PRIVATE REDACTLY_HAVE_SVG)
+    message(STATUS "Redactly: SVG settings icon enabled")
+else()
+    message(STATUS "Redactly: Qt Svg not found; using a text glyph for the settings icon")
+endif()
+
 if(Qt6LinguistTools_FOUND)
     qt_add_translations(Redactly
         TS_FILES translations/redactly_ko.ts
@@ -226,6 +234,13 @@ if(BUILD_TESTING)
         include/redactly/Mosaic.hpp
     )
     target_include_directories(redactly_tests PRIVATE include)
+    # The tests use assert() as their check mechanism, so keep assertions live
+    # even in Release/RelWithDebInfo builds (which would otherwise define NDEBUG).
+    if(MSVC)
+        target_compile_options(redactly_tests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(redactly_tests PRIVATE -UNDEBUG)
+    endif()
     target_link_libraries(redactly_tests PRIVATE
         Qt6::Core
         ${OpenCV_LIBS}

@@ -425,9 +425,10 @@ namespace redactly
 
         settingsButton_ = new QToolButton(header);
         settingsButton_->setObjectName("settingsButton");
-        settingsButton_->setText(QStringLiteral("⚙"));
+        settingsButton_->setFixedSize(36, 36);
         settingsButton_->setFocusPolicy(Qt::NoFocus);
         settingsButton_->setCursor(Qt::PointingHandCursor);
+        updateSettingsIcon();
         addRetranslation([this]{ settingsButton_->setToolTip(tr("Settings")); });
         connect(settingsButton_, &QToolButton::clicked, this, &MainWindow::openSettings);
 
@@ -853,6 +854,7 @@ namespace redactly
 
         populateBundledModels();
         loadSettings();
+        updateSettingsIcon();
         appendLog(tr("Ready. Drop images or folders to begin."));
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
@@ -861,6 +863,7 @@ namespace redactly
             if (themeMode_ == ThemeMode::System)
             {
                 applyTheme(*qApp, ThemeMode::System);
+                updateSettingsIcon();
             }
         });
 #endif
@@ -1357,6 +1360,7 @@ namespace redactly
         {
             themeMode_ = mode;
             applyTheme(*qApp, mode);
+            updateSettingsIcon();
             saveSettings();
         });
         connect(&dialog, &SettingsDialog::languageChanged, this, [this](const QString &language)
@@ -1374,6 +1378,25 @@ namespace redactly
         });
 
         dialog.exec();
+    }
+
+    void MainWindow::updateSettingsIcon() const
+    {
+        if (settingsButton_ == nullptr)
+        {
+            return;
+        }
+        const QIcon icon = settingsGearIcon(themeMode_);
+        if (icon.isNull())
+        {
+            settingsButton_->setText(QStringLiteral("⚙"));
+        }
+        else
+        {
+            settingsButton_->setText(QString());
+            settingsButton_->setIcon(icon);
+            settingsButton_->setIconSize(QSize(20, 20));
+        }
     }
 
     void MainWindow::addInputPath(const QString &path) const
