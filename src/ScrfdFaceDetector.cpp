@@ -17,6 +17,7 @@ namespace redactly
         constexpr int kChannels = 3;
         constexpr int kMaxAnchorsPerLocation = 2;
         constexpr size_t kMaxCandidatesBeforeNms = 2000;
+        constexpr int kMaxInputSize = 2048;
 
         cv::Rect2f distanceToBox(const cv::Point2f &center, const float *distances)
         {
@@ -78,12 +79,35 @@ namespace redactly
         {
             return actual < 0 || actual == expected;
         };
-        if (!dimensionMatches(inputShape[0], 1) ||
-            !dimensionMatches(inputShape[1], kChannels) ||
-            !dimensionMatches(inputShape[2], inputSize_) ||
-            !dimensionMatches(inputShape[3], inputSize_))
+        if (!dimensionMatches(inputShape[0], 1) || !dimensionMatches(inputShape[1], kChannels))
         {
-            throw std::runtime_error("SCRFD model input shape must be compatible with [1, 3, 640, 640].");
+            throw std::runtime_error("SCRFD model input must be a [1, 3, H, W] tensor.");
+        }
+
+        const int64_t modelHeight = inputShape[2];
+        const int64_t modelWidth = inputShape[3];
+        const bool heightFixed = modelHeight > 0;
+        const bool widthFixed = modelWidth > 0;
+        if (heightFixed != widthFixed)
+        {
+            throw std::runtime_error(
+                "SCRFD model must have both spatial dimensions fixed or both dynamic.");
+        }
+        if (heightFixed)
+        {
+            if (modelHeight != modelWidth)
+            {
+                throw std::runtime_error("SCRFD model input must be square.");
+            }
+            if (modelHeight % kStrides.back() != 0)
+            {
+                throw std::runtime_error("SCRFD model input size must be a multiple of 32.");
+            }
+            if (modelHeight > kMaxInputSize)
+            {
+                throw std::runtime_error("SCRFD model input size is too large.");
+            }
+            inputSize_ = static_cast<int>(modelHeight);
         }
 
         for (size_t i = 0; i < std::min<size_t>(outputNames_.size(), kStrides.size() * 2U); ++i)
@@ -354,50 +378,5 @@ namespace redactly
             }
         }
         return anchors;
-    }
-
-    float ScrfdFaceDetector::intersectionOverUnion(const cv::Rect2f &a, const cv::Rect2f &b)
-    {
-        const float areaA = a.area();
-        const float areaB = b.area();
-        if (areaA <= 0.0F || areaB <= 0.0F)
-        {
-            return 0.0F;
-        }
-
-        const float left = std::max(a.x, b.x);
-        const float top = std::max(a.y, b.y);
-        const float right = std::min(a.x + a.width, b.x + b.width);
-        const float bottom = std::min(a.y + a.height, b.y + b.height);
-        const float intersection = std::max(0.0F, right - left) * std::max(0.0F, bottom - top);
-        return intersection / (areaA + areaB - intersection);
-    }
-
-    FaceDetections ScrfdFaceDetector::nonMaxSuppression(FaceDetections detections, float threshold)
-    {
-        std::ranges::sort(detections, [](const FaceDetection &a, const FaceDetection &b)
-        {
-            return a.score > b.score;
-        });
-
-        FaceDetections kept;
-        std::vector<bool> suppressed(detections.size(), false);
-        for (size_t i = 0; i < detections.size(); ++i)
-        {
-            if (suppressed[i])
-            {
-                continue;
-            }
-            kept.push_back(detections[i]);
-            for (size_t j = i + 1; j < detections.size(); ++j)
-            {
-                if (!suppressed[j] && intersectionOverUnion(detections[i].box, detections[j].box) > threshold)
-                {
-                    suppressed[j] = true;
-                }
-            }
-        }
-
-        return kept;
     }
 }

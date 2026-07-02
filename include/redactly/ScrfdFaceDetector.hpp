@@ -1,5 +1,6 @@
 #pragma once
 
+#include "redactly/DetectionGeometry.hpp"
 #include "redactly/Detector.hpp"
 #include "redactly/FaceDetection.hpp"
 
@@ -37,10 +38,6 @@ namespace redactly
                                             float nmsThreshold) const;
 
         [[nodiscard]] static std::vector<cv::Point2f> anchorCenters(int featureHeight, int featureWidth, int stride);
-
-        static float intersectionOverUnion(const cv::Rect2f &a, const cv::Rect2f &b);
-
-        static FaceDetections nonMaxSuppression(FaceDetections detections, float threshold);
 
         int inputSize_;
         Ort::Env env_;

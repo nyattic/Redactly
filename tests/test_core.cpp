@@ -1,3 +1,4 @@
+#include "redactly/DetectionGeometry.hpp"
 #include "redactly/ImageIo.hpp"
 #include "redactly/ImageScanner.hpp"
 #include "redactly/Mosaic.hpp"
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <set>
 
@@ -129,6 +131,34 @@ namespace
         assert(redactly::encodeParamsForExtension(".bmp").empty());
     }
 
+    void testIntersectionOverUnion()
+    {
+        const cv::Rect2f a(0.0F, 0.0F, 10.0F, 10.0F);
+        assert(std::abs(redactly::intersectionOverUnion(a, a) - 1.0F) < 1e-5F);
+
+        const cv::Rect2f disjoint(100.0F, 100.0F, 10.0F, 10.0F);
+        assert(redactly::intersectionOverUnion(a, disjoint) == 0.0F);
+
+        const cv::Rect2f empty(0.0F, 0.0F, 0.0F, 0.0F);
+        assert(redactly::intersectionOverUnion(a, empty) == 0.0F);
+
+        const cv::Rect2f halfShifted(5.0F, 0.0F, 10.0F, 10.0F);
+        assert(std::abs(redactly::intersectionOverUnion(a, halfShifted) - (50.0F / 150.0F)) < 1e-5F);
+    }
+
+    void testNonMaxSuppression()
+    {
+        redactly::FaceDetections detections;
+        detections.push_back({cv::Rect2f(0.0F, 0.0F, 10.0F, 10.0F), 0.9F});
+        detections.push_back({cv::Rect2f(1.0F, 1.0F, 10.0F, 10.0F), 0.8F});
+        detections.push_back({cv::Rect2f(100.0F, 100.0F, 10.0F, 10.0F), 0.7F});
+
+        const auto kept = redactly::nonMaxSuppression(detections, 0.4F);
+        assert(kept.size() == 2);
+        assert(kept[0].score == 0.9F);
+        assert(kept[1].box.x == 100.0F);
+    }
+
     void testDestinationPathSafety()
     {
         QTemporaryDir temp;
@@ -214,6 +244,8 @@ int main()
     testApplyMosaicTouchesOnlyDetectedRegion();
     testOrientationTransforms();
     testEncodeParams();
+    testIntersectionOverUnion();
+    testNonMaxSuppression();
     testDestinationPathSafety();
 #ifndef _WIN32
     testDestinationRejectsSymlinkEscape();
