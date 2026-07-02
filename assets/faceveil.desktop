@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=FaceVeil
+GenericName=Face Anonymizer
+Comment=Detect and anonymize faces in images
+Exec=FaceVeil %F
+Icon=faceveil
+Terminal=false
+Categories=Graphics;Photography;
+MimeType=image/jpeg;image/png;image/bmp;image/tiff;image/webp;
+Keywords=face;blur;mosaic;anonymize;privacy;

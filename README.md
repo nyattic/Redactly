@@ -13,6 +13,7 @@ Download from [Releases](https://github.com/nyattic/FaceVeil/releases/latest):
 
 - **macOS** (Apple Silicon, macOS 15+) — open the `.dmg`, drag to Applications
 - **Windows** (x64, Windows 10+) — unzip, run `FaceVeil.exe`
+- **Linux** (x86_64) — download the `.AppImage`, `chmod +x` it, and run it
 
 The first time you use a built-in model, FaceVeil downloads it once (3–17 MB) from Hugging Face and caches it; after that it runs offline.
 
@@ -68,6 +69,24 @@ cmake --build build-windows --config Release
 
 spdlog must also be discoverable by CMake — for example install it with [vcpkg](https://vcpkg.io) (`vcpkg install spdlog`) and add the vcpkg entries to `CMAKE_PREFIX_PATH`.
 
+### Linux
+
+Install the build dependencies (Debian/Ubuntu example):
+
+```bash
+sudo apt install cmake ninja-build build-essential pkg-config \
+  qt6-base-dev qt6-tools-dev libopencv-dev libspdlog-dev libexiv2-dev
+```
+
+ONNX Runtime is detected via `pkg-config libonnxruntime` when available; otherwise point CMake at an ONNX Runtime release:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DONNXRUNTIME_ROOT=/path/to/onnxruntime-linux-x64
+cmake --build build
+./build/FaceVeil
+```
+
 ### Tests
 
 ```bash
@@ -76,7 +95,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scripts/package_windows.ps1`](scripts/package_windows.ps1), [`scripts/notarize_macos.sh`](scripts/notarize_macos.sh).
+Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scripts/package_windows.ps1`](scripts/package_windows.ps1), [`scripts/package_linux.sh`](scripts/package_linux.sh), [`scripts/notarize_macos.sh`](scripts/notarize_macos.sh).
 
 ## Privacy
 

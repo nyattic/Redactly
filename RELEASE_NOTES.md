@@ -1,3 +1,10 @@
+# FaceVeil 1.2.0
+
+Adds Linux support: FaceVeil now builds on Linux and ships a self-contained
+`.AppImage` in each release alongside the macOS and Windows downloads.
+
+---
+
 # FaceVeil 1.1.2
 
 Fixes opening images with non-ASCII (e.g. Korean) filenames on Windows, which

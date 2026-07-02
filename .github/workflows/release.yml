@@ -16,6 +16,7 @@ concurrency:
 env:
   OPENCV_SHA256: bff38466091c313dac21a0b73eea8278316a89c1d434c6f0b10697e087670168
   ONNXRUNTIME_SHA256: 78d447051e48bd2e1e778bba378bec4ece11191c9e538cf7b2c4a4565e8f5581
+  ONNXRUNTIME_LINUX_SHA256: 67db4dc1561f1e3fd42e619575c82c601ef89849afc7ea85a003abbac1a1a105
 
 jobs:
   macos:
@@ -126,9 +127,56 @@ jobs:
           name: windows-zip
           path: artifacts/*.zip
 
+  linux:
+    name: Build Linux AppImage
+    runs-on: ubuntu-22.04
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: 1
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build build-essential pkg-config file desktop-file-utils \
+            libopencv-dev libspdlog-dev libexiv2-dev \
+            libgl1-mesa-dev libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.8.1'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+
+      - name: Install ONNX Runtime
+        run: |
+          curl -fL "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz" -o onnx.tgz
+          echo "${ONNXRUNTIME_LINUX_SHA256}  onnx.tgz" | sha256sum -c -
+          mkdir -p "$HOME/onnx"
+          tar -xzf onnx.tgz -C "$HOME/onnx"
+          echo "ONNXRUNTIME_ROOT=$HOME/onnx/onnxruntime-linux-x64-1.20.1" >> "$GITHUB_ENV"
+
+      - name: Build & package AppImage
+        run: |
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          bash scripts/package_linux.sh
+
+      - name: Stage artifact
+        run: |
+          mkdir -p artifacts
+          cp dist/linux/*.AppImage artifacts/
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: linux-appimage
+          path: artifacts/*.AppImage
+
   release:
     name: Publish release
-    needs: [macos, windows]
+    needs: [macos, windows, linux]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

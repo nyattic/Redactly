@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FaceVeil VERSION 1.1.2 LANGUAGES CXX)
+project(FaceVeil VERSION 1.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,8 +23,9 @@ if(NOT exiv2_FOUND)
 endif()
 include(CTest)
 
-if(WIN32)
-    set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to the ONNX Runtime package root")
+set(ONNXRUNTIME_ROOT "" CACHE PATH "Path to the ONNX Runtime package root")
+
+function(faceveil_onnxruntime_from_root)
     find_path(ONNXRUNTIME_INCLUDE_DIR
         NAMES onnxruntime_cxx_api.h
         HINTS
@@ -39,18 +40,29 @@ if(WIN32)
     )
 
     if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIBRARY)
-        message(FATAL_ERROR "ONNX Runtime was not found. Configure with -DONNXRUNTIME_ROOT=C:/path/to/onnxruntime-win-x64")
+        message(FATAL_ERROR "ONNX Runtime was not found. Configure with -DONNXRUNTIME_ROOT=/path/to/onnxruntime")
     endif()
 
-    add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
+    add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED GLOBAL)
     set_target_properties(onnxruntime::onnxruntime PROPERTIES
         IMPORTED_LOCATION "${ONNXRUNTIME_LIBRARY}"
         INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_INCLUDE_DIR}"
     )
+endfunction()
+
+if(WIN32)
+    faceveil_onnxruntime_from_root()
 else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(ONNXRUNTIME REQUIRED IMPORTED_TARGET libonnxruntime)
-    add_library(onnxruntime::onnxruntime ALIAS PkgConfig::ONNXRUNTIME)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ONNXRUNTIME IMPORTED_TARGET libonnxruntime)
+    endif()
+
+    if(ONNXRUNTIME_FOUND)
+        add_library(onnxruntime::onnxruntime ALIAS PkgConfig::ONNXRUNTIME)
+    else()
+        faceveil_onnxruntime_from_root()
+    endif()
 endif()
 
 set(FACEVEIL_APP_OPTIONS)
@@ -171,6 +183,11 @@ install(TARGETS FaceVeil
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
+
+if(UNIX AND NOT APPLE)
+    install(FILES assets/faceveil.desktop DESTINATION share/applications)
+    install(FILES assets/icon.png DESTINATION share/pixmaps RENAME faceveil.png)
+endif()
 
 add_executable(faceveil_inspect_model
     tools/inspect_model.cpp
