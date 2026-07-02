@@ -59,17 +59,46 @@ mkdir -p "$TOOLS_DIR"
 LINUXDEPLOY="$TOOLS_DIR/linuxdeploy-${ARCH}.AppImage"
 LINUXDEPLOY_QT="$TOOLS_DIR/linuxdeploy-plugin-qt-${ARCH}.AppImage"
 
-fetch() {
-    local url="$1" out="$2"
-    if [[ ! -f "$out" ]]; then
-        echo "⬇️  $url"
-        curl -fL "$url" -o "$out"
-        chmod +x "$out"
+# linuxdeploy ships only a rolling "continuous" release, so we verify what we
+# download against pinned hashes and fail closed. When upstream updates these
+# tools, refresh the SHA256 values below. Only x86_64 (the release target) is
+# pinned; other arches skip verification for local development builds.
+LINUXDEPLOY_SHA256_x86_64="e87ee0815d109282fdda73e34c2361d64d02b0ffaea3674b18f1fd1f6a687dcf"
+LINUXDEPLOY_QT_SHA256_x86_64="be1b7e166bf9975cfb694ebe6759ba40502ffc6196440d3e64aa90c4dbd67e9f"
+
+verify_sha256() {
+    local file="$1" expected="$2"
+    if [[ -z "$expected" ]]; then
+        echo "⚠️  No pinned SHA256 for $(basename "$file") on $ARCH; skipping verification (dev build)."
+        return 0
+    fi
+    local actual
+    actual="$(sha256sum "$file" | awk '{print $1}')"
+    if [[ "$actual" != "$expected" ]]; then
+        echo "❌ SHA256 mismatch for $(basename "$file"): got $actual, expected $expected"
+        exit 1
     fi
 }
 
-fetch "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ARCH}.AppImage" "$LINUXDEPLOY"
-fetch "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${ARCH}.AppImage" "$LINUXDEPLOY_QT"
+fetch() {
+    local url="$1" out="$2" expected="${3:-}"
+    if [[ ! -f "$out" ]]; then
+        echo "⬇️  $url"
+        curl -fL "$url" -o "$out"
+    fi
+    verify_sha256 "$out" "$expected"
+    chmod +x "$out"
+}
+
+linuxdeploy_expected=""
+linuxdeploy_qt_expected=""
+if [[ "$ARCH" == "x86_64" ]]; then
+    linuxdeploy_expected="$LINUXDEPLOY_SHA256_x86_64"
+    linuxdeploy_qt_expected="$LINUXDEPLOY_QT_SHA256_x86_64"
+fi
+
+fetch "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ARCH}.AppImage" "$LINUXDEPLOY" "$linuxdeploy_expected"
+fetch "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${ARCH}.AppImage" "$LINUXDEPLOY_QT" "$linuxdeploy_qt_expected"
 
 export PATH="$TOOLS_DIR:$PATH"
 if [[ -n "${QMAKE:-}" ]]; then
