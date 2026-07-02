@@ -5,6 +5,23 @@ button in the header — lets you pick **System**, **Light**, or **Dark**;
 System follows the OS appearance and switches live when it changes. The
 language and startup update-check options now live in this dialog too.
 
+Also fixes two important issues. **Stop** now takes effect immediately during
+a batch, and closing the window mid-run no longer hangs the app. And when
+**Preserve original metadata** is on, the embedded EXIF preview thumbnail —
+which still showed the unredacted image — is now stripped from the output.
+
+Batch runs are more robust and honest: a corrupt or unreadable image no longer
+aborts the rest of the batch, images saved with no regions redacted are called
+out per image and in the summary, runs that couldn't start report a failure
+instead of "Done", and an input file that already lives in the output folder is
+skipped instead of being overwritten in place.
+
+In the review dialog, Esc (or closing the window) now skips just the current
+image instead of cancelling the whole batch, and **Cancel All** asks for
+confirmation first. Korean users get localized Yes/No dialog buttons and the
+previously untranslated license-plate download prompt. Each release now ships
+a `SHA256SUMS` file so downloads can be verified.
+
 ---
 
 # Redactly 1.4.0
