@@ -100,6 +100,7 @@ add_library(redactly_core STATIC
     src/ScrfdFaceDetector.cpp
     src/Tracking.cpp
     src/VideoIo.cpp
+    src/VideoProcessor.cpp
     include/redactly/DetectionGeometry.hpp
     include/redactly/Detector.hpp
     include/redactly/FaceDetection.hpp
@@ -116,6 +117,7 @@ add_library(redactly_core STATIC
     include/redactly/ScrfdFaceDetector.hpp
     include/redactly/Tracking.hpp
     include/redactly/VideoIo.hpp
+    include/redactly/VideoProcessor.hpp
 )
 
 target_include_directories(redactly_core PUBLIC include)

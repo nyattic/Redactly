@@ -18,7 +18,8 @@ namespace redactly
 
     public:
         SettingsDialog(ThemeMode theme, const QString &language, bool checkForUpdates,
-                       bool fileLogging, bool gpuAcceleration, QWidget *parent = nullptr);
+                       bool fileLogging, bool gpuAcceleration, int videoQuality,
+                       QWidget *parent = nullptr);
 
     signals:
         void themeChanged(redactly::ThemeMode mode);
@@ -31,6 +32,8 @@ namespace redactly
 
         void gpuAccelerationChanged(bool enabled);
 
+        void videoQualityChanged(int quality);
+
     protected:
         void changeEvent(QEvent *event) override;
 
@@ -39,8 +42,10 @@ namespace redactly
 
         QLabel *themeLabel_ = nullptr;
         QLabel *languageLabel_ = nullptr;
+        QLabel *videoQualityLabel_ = nullptr;
         QComboBox *themeCombo_ = nullptr;
         QComboBox *languageCombo_ = nullptr;
+        QComboBox *videoQualityCombo_ = nullptr;
         QCheckBox *updateCheck_ = nullptr;
         QCheckBox *logCheck_ = nullptr;
         QCheckBox *gpuCheck_ = nullptr;

@@ -9,6 +9,8 @@
 #include "redactly/Mosaic.hpp"
 #include "redactly/ReviewTypes.hpp"
 #include "redactly/ScrfdFaceDetector.hpp"
+#include "redactly/VideoIo.hpp"
+#include "redactly/VideoProcessor.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -110,6 +112,17 @@ namespace redactly
             return scaled;
         }
 
+        std::filesystem::path outputRelativePath(const ScanResult &item)
+        {
+            if (isSupportedVideo(item.sourcePath))
+            {
+                auto relative = item.relativePath;
+                relative.replace_extension(".mp4");
+                return relative;
+            }
+            return item.relativePath;
+        }
+
         std::string destinationKey(const std::filesystem::path &path)
         {
             auto key = pathToUtf8(path.lexically_normal());
@@ -129,7 +142,7 @@ namespace redactly
             std::unordered_map<std::string, std::filesystem::path> firstSourceForDestination;
             for (const auto &item: images)
             {
-                const auto destination = (safeRoot / item.relativePath).lexically_normal();
+                const auto destination = (safeRoot / outputRelativePath(item)).lexically_normal();
                 const auto key = destinationKey(destination);
                 const auto [it, inserted] = firstSourceForDestination.emplace(key, item.sourcePath);
                 if (!inserted)
@@ -247,7 +260,8 @@ namespace redactly
                                      bool detectPlates,
                                      QString plateModelPath,
                                      std::shared_ptr<PlateDetector> cachedPlateDetector,
-                                     bool gpuAcceleration)
+                                     bool gpuAcceleration,
+                                     int videoCrf)
         : modelPath_(std::move(modelPath)),
           inputs_(std::move(inputs)),
           outputDirectory_(std::move(outputDirectory)),
@@ -266,6 +280,7 @@ namespace redactly
           detectPlates_(detectPlates),
           plateModelPath_(std::move(plateModelPath)),
           gpuAcceleration_(gpuAcceleration),
+          videoCrf_(videoCrf),
           detector_(std::move(cachedDetector)),
           plateDetector_(std::move(cachedPlateDetector))
     {
@@ -319,10 +334,10 @@ namespace redactly
                                     .arg(QString::fromLatin1(ortAcceleratorName(plateDetector_->accelerator()))));
             }
 
-            emit logMessage(tr("Scanning images..."));
-            const auto images = scanImages(inputs_, recursive_);
+            emit logMessage(tr("Scanning inputs..."));
+            const auto images = scanMedia(inputs_, recursive_, true);
             const int total = static_cast<int>(images.size());
-            emit logMessage(tr("Preflight: found %n supported image(s).", nullptr, total));
+            emit logMessage(tr("Preflight: found %n supported file(s).", nullptr, total));
             emit progressChanged(0, total);
 
             if (cancelled_.load(std::memory_order_acquire))
@@ -333,7 +348,7 @@ namespace redactly
 
             if (total == 0)
             {
-                emit logMessage(tr("No supported images were found."));
+                emit logMessage(tr("No supported files were found."));
                 emit finished(RunOutcome::Failed);
                 return;
             }
@@ -413,12 +428,21 @@ namespace redactly
             }
             else
             {
+                std::vector<std::size_t> imageIndexes;
+                std::vector<std::size_t> videoIndexes;
+                for (std::size_t i = 0; i < images.size(); ++i)
+                {
+                    (isSupportedVideo(images[i].sourcePath) ? videoIndexes : imageIndexes)
+                            .push_back(i);
+                }
+
                 const unsigned threadCount =
                         std::min(4U, std::max(1U, std::thread::hardware_concurrency()));
                 processOrdered<ItemOutcome>(
-                    images.size(), threadCount, threadCount, cancelled_,
-                    [&](std::size_t i)
+                    imageIndexes.size(), threadCount, threadCount, cancelled_,
+                    [&](std::size_t k)
                     {
+                        const auto i = imageIndexes[k];
                         return processItem(images[i], safeRoot,
                                            static_cast<int>(i) + 1, total, false);
                     },
@@ -426,6 +450,22 @@ namespace redactly
                     {
                         applyOutcome(std::move(outcome));
                     });
+
+                for (const auto i: videoIndexes)
+                {
+                    if (cancelled_.load(std::memory_order_acquire))
+                    {
+                        break;
+                    }
+                    auto outcome = processItem(images[i], safeRoot,
+                                               static_cast<int>(i) + 1, total, false);
+                    const bool stop = outcome.cancelled;
+                    applyOutcome(std::move(outcome));
+                    if (stop)
+                    {
+                        break;
+                    }
+                }
             }
 
             emit logMessage(
@@ -472,7 +512,7 @@ namespace redactly
         try
         {
             const auto source = item.sourcePath;
-            const auto destination = (safeRoot / item.relativePath).lexically_normal();
+            const auto destination = (safeRoot / outputRelativePath(item)).lexically_normal();
 
             if (!destinationIsSafe(destination, safeRoot))
             {
@@ -503,6 +543,11 @@ namespace redactly
                          QString::fromStdString(parentMkdirError.message())));
                 outcome.skipped = 1;
                 return outcome;
+            }
+
+            if (isSupportedVideo(source))
+            {
+                return processVideoItem(item, destination, index, total);
             }
 
             std::error_code sizeError;
@@ -718,6 +763,122 @@ namespace redactly
             outcome.logs.push_back(tr("Error processing %1")
                 .arg(pathToQString(item.sourcePath.filename())));
             outcome.failed = 1;
+        }
+        return outcome;
+    }
+
+    ProcessorWorker::ItemOutcome ProcessorWorker::processVideoItem(const ScanResult &item,
+                                                                   const std::filesystem::path &destination,
+                                                                   const int index,
+                                                                   const int total)
+    {
+        ItemOutcome outcome;
+        const QString fileName = pathToQString(item.sourcePath.filename());
+
+        if (reviewEnabled_)
+        {
+            outcome.logs.push_back(tr("Videos are processed without review: %1").arg(fileName));
+        }
+        if (preserveMetadata_)
+        {
+            outcome.logs.push_back(
+                tr("Metadata preservation is not available for videos; metadata was removed: %1")
+                    .arg(fileName));
+        }
+
+        QString toolsError;
+        const auto tools = locateFfmpegTools(&toolsError);
+        if (!tools)
+        {
+            outcome.logs.push_back(tr("Failed (%1): %2").arg(toolsError, fileName));
+            outcome.failed = 1;
+            return outcome;
+        }
+
+        emit stageChanged(index, total, tr("Inspecting"), fileName);
+        QString probeError;
+        const auto info = probeVideo(*tools, pathToQString(item.sourcePath), &probeError);
+        if (!info)
+        {
+            outcome.logs.push_back(tr("Failed (%1): %2").arg(probeError, fileName));
+            outcome.failed = 1;
+            return outcome;
+        }
+        const auto unsupported = videoUnsupportedReason(*info);
+        if (!unsupported.isEmpty())
+        {
+            outcome.logs.push_back(
+                tr("Failed (unsupported video: %1): %2").arg(unsupported, fileName));
+            outcome.failed = 1;
+            return outcome;
+        }
+        if (info->isVfr)
+        {
+            outcome.logs.push_back(
+                tr("Note: variable frame rate is converted to a constant frame rate: %1")
+                    .arg(fileName));
+        }
+
+        VideoProcessOptions options;
+        options.scoreThreshold = scoreThreshold_;
+        options.nmsThreshold = nmsThreshold_;
+        options.mosaicBlockSize = mosaicBlockSize_;
+        options.paddingRatio = paddingRatio_;
+        options.method = method_;
+        options.shape = shape_;
+        options.softEdges = softEdges_;
+        options.crf = videoCrf_;
+
+        int lastPass = 0;
+        int lastPercent = -1;
+        const auto progress = [&](int pass, qint64 frame, qint64 totalFrames)
+        {
+            const int percent = totalFrames > 0
+                                    ? static_cast<int>(std::min<qint64>(100, frame * 100 / totalFrames))
+                                    : 0;
+            if (pass == lastPass && percent == lastPercent)
+            {
+                return;
+            }
+            lastPass = pass;
+            lastPercent = percent;
+            const QString stage = pass == 1 ? tr("Analyzing %1%").arg(percent)
+                                            : tr("Encoding %1%").arg(percent);
+            emit stageChanged(index, total, stage, fileName);
+        };
+
+        std::lock_guard lock(detectMutex_);
+        const auto result = processVideo(*tools,
+                                         pathToQString(item.sourcePath),
+                                         pathToQString(destination),
+                                         *info, options,
+                                         detector_.get(), plateDetector_.get(),
+                                         cancelled_, progress);
+        switch (result.status)
+        {
+            case VideoProcessStatus::Completed:
+                if (result.trackCount == 0)
+                {
+                    outcome.logs.push_back(
+                        tr("Saved with no regions redacted: %1").arg(fileName));
+                    outcome.unredacted = 1;
+                }
+                else
+                {
+                    outcome.logs.push_back(
+                        tr("Redacted %n region(s): %1", nullptr, result.trackCount)
+                            .arg(fileName));
+                }
+                outcome.anonymized = 1;
+                break;
+            case VideoProcessStatus::Cancelled:
+                outcome.cancelled = true;
+                break;
+            case VideoProcessStatus::Failed:
+                outcome.logs.push_back(
+                    tr("Failed to process video %1: %2").arg(fileName, result.error));
+                outcome.failed = 1;
+                break;
         }
         return outcome;
     }

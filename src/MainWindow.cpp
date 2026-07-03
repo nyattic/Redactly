@@ -12,6 +12,7 @@
 #include "redactly/SettingsDialog.hpp"
 #include "redactly/Theme.hpp"
 #include "redactly/UpdateChecker.hpp"
+#include "redactly/VideoIo.hpp"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -292,7 +293,7 @@ namespace redactly
 
         auto *subtitle = new QLabel(header);
         subtitle->setObjectName("subtitleLabel");
-        addRetranslation([subtitle]{ subtitle->setText(tr("Local, private redaction of faces and license plates in photos")); });
+        addRetranslation([subtitle]{ subtitle->setText(tr("Local, private redaction of faces and license plates in photos and videos")); });
         headerLayout->addLayout(titleRow);
         headerLayout->addWidget(subtitle);
         root->addWidget(header);
@@ -374,7 +375,7 @@ namespace redactly
             auto *inputsHint = makeSectionHint(card);
             cardLayout->addWidget(inputsHint);
             addRetranslation([inputsHint]
-                             { inputsHint->setText(tr("Drag images or folders here, or use the buttons below.")); });
+                             { inputsHint->setText(tr("Drag images, videos, or folders here, or use the buttons below.")); });
 
             auto *dropList = new DropListWidget(card);
             inputList_ = dropList;
@@ -384,7 +385,7 @@ namespace redactly
             inputList_->setIconSize(QSize(40, 40));
             addRetranslation([this, dropList]
                              {
-                                 dropList->setPlaceholderText(tr("Drop images or folders here"));
+                                 dropList->setPlaceholderText(tr("Drop images, videos, or folders here"));
                                  inputList_->setAccessibleName(tr("Input images and folders"));
                                  inputList_->setToolTip(tr("Right-click for options · Delete removes selected items"));
                              });
@@ -412,7 +413,8 @@ namespace redactly
                                  reviewCheck_->setToolTip(tr(
                                      "Before saving each image, open a preview where you can:\n"
                                      "  • Click a detected box to exclude it\n"
-                                     "  • Drag an empty area to add a box the model missed"));
+                                     "  • Drag an empty area to add a box the model missed\n"
+                                     "Videos are processed without review."));
                              });
 
             connect(addFiles, &QPushButton::clicked, this, &MainWindow::chooseFiles);
@@ -794,7 +796,12 @@ namespace redactly
             {
                 return true;
             }
-            return info.isFile() && isSupportedImage(pathFromQString(info.filePath()));
+            if (!info.isFile())
+            {
+                return false;
+            }
+            const auto path = pathFromQString(info.filePath());
+            return isSupportedImage(path) || isSupportedVideo(path);
         }
 
         bool hasAcceptableLocalUrls(const QMimeData *mime)
@@ -888,10 +895,10 @@ namespace redactly
     void MainWindow::chooseFiles()
     {
         const auto files = QFileDialog::getOpenFileNames(this,
-                                                         tr("Select Images"),
+                                                         tr("Select Images or Videos"),
                                                          QStandardPaths::writableLocation(
                                                              QStandardPaths::PicturesLocation),
-                                                         tr("Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)"));
+                                                         tr("Images & Videos (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp *.mp4 *.mov *.m4v)"));
         for (const auto &file: files)
         {
             addInputPath(file);
@@ -1049,7 +1056,8 @@ namespace redactly
                                       detectPlates,
                                       plateModelPath,
                                       std::move(plateForRun),
-                                      gpuAcceleration_);
+                                      gpuAcceleration_,
+                                      crfForQuality(static_cast<VideoQuality>(videoQuality_)));
 
         worker_->moveToThread(workerThread_);
         connect(workerThread_, &QThread::started, worker_, &ProcessorWorker::process);
@@ -1243,6 +1251,7 @@ namespace redactly
         checkForUpdatesOnStartup_ = settings.value("checkForUpdates", true).toBool();
         fileLogging_ = settings.value("fileLogging", true).toBool();
         gpuAcceleration_ = settings.value("gpuAcceleration", true).toBool();
+        videoQuality_ = std::clamp(settings.value("videoQuality", 0).toInt(), 0, 2);
 
         const auto savedLanguage = settings.value("language").toString();
         QString language = savedLanguage;
@@ -1294,6 +1303,7 @@ namespace redactly
         settings.setValue("checkForUpdates", checkForUpdatesOnStartup_);
         settings.setValue("fileLogging", fileLogging_);
         settings.setValue("gpuAcceleration", gpuAcceleration_);
+        settings.setValue("videoQuality", videoQuality_);
 
         settings.setValue("language", language_);
     }
@@ -1324,7 +1334,7 @@ namespace redactly
     void MainWindow::openSettings()
     {
         SettingsDialog dialog(themeMode_, language_, checkForUpdatesOnStartup_, fileLogging_,
-                              gpuAcceleration_, this);
+                              gpuAcceleration_, videoQuality_, this);
 
         connect(&dialog, &SettingsDialog::themeChanged, this, [this](ThemeMode mode)
         {
@@ -1349,6 +1359,11 @@ namespace redactly
         connect(&dialog, &SettingsDialog::fileLoggingChanged, this, [this](bool enabled)
         {
             fileLogging_ = enabled;
+            saveSettings();
+        });
+        connect(&dialog, &SettingsDialog::videoQualityChanged, this, [this](int quality)
+        {
+            videoQuality_ = std::clamp(quality, 0, 2);
             saveSettings();
         });
         connect(&dialog, &SettingsDialog::gpuAccelerationChanged, this, [this](bool enabled)

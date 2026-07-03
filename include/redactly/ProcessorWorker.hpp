@@ -49,7 +49,8 @@ namespace redactly
                         bool detectPlates = false,
                         QString plateModelPath = {},
                         std::shared_ptr<PlateDetector> cachedPlateDetector = {},
-                        bool gpuAcceleration = false);
+                        bool gpuAcceleration = false,
+                        int videoCrf = 18);
 
         ~ProcessorWorker() override;
 
@@ -80,6 +81,11 @@ namespace redactly
                                 int total,
                                 bool allowReview);
 
+        ItemOutcome processVideoItem(const ScanResult &item,
+                                     const std::filesystem::path &destination,
+                                     int index,
+                                     int total);
+
         QString modelPath_;
         QStringList inputs_;
         QString outputDirectory_;
@@ -98,6 +104,7 @@ namespace redactly
         bool detectPlates_;
         QString plateModelPath_;
         bool gpuAcceleration_;
+        int videoCrf_;
         std::atomic<bool> cancelled_{false};
         std::mutex detectMutex_;
         std::shared_ptr<ScrfdFaceDetector> detector_;

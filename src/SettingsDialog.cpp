@@ -12,7 +12,8 @@
 namespace redactly
 {
     SettingsDialog::SettingsDialog(ThemeMode theme, const QString &language, bool checkForUpdates,
-                                   bool fileLogging, bool gpuAcceleration, QWidget *parent)
+                                   bool fileLogging, bool gpuAcceleration, int videoQuality,
+                                   QWidget *parent)
         : QDialog(parent)
     {
         setModal(true);
@@ -40,10 +41,19 @@ namespace redactly
         const int languageIndex = languageCombo_->findData(language);
         languageCombo_->setCurrentIndex(languageIndex >= 0 ? languageIndex : 0);
 
+        videoQualityCombo_ = new QComboBox(this);
+        videoQualityCombo_->addItem(QString(), 0);
+        videoQualityCombo_->addItem(QString(), 1);
+        videoQualityCombo_->addItem(QString(), 2);
+        const int qualityIndex = videoQualityCombo_->findData(videoQuality);
+        videoQualityCombo_->setCurrentIndex(qualityIndex >= 0 ? qualityIndex : 0);
+
         themeLabel_ = new QLabel(this);
         languageLabel_ = new QLabel(this);
+        videoQualityLabel_ = new QLabel(this);
         form->addRow(themeLabel_, themeCombo_);
         form->addRow(languageLabel_, languageCombo_);
+        form->addRow(videoQualityLabel_, videoQualityCombo_);
         root->addLayout(form);
 
         updateCheck_ = new QCheckBox(this);
@@ -84,6 +94,10 @@ namespace redactly
         {
             emit gpuAccelerationChanged(enabled);
         });
+        connect(videoQualityCombo_, &QComboBox::currentIndexChanged, this, [this]
+        {
+            emit videoQualityChanged(videoQualityCombo_->currentData().toInt());
+        });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
         retranslate();
@@ -104,6 +118,12 @@ namespace redactly
         gpuCheck_->setText(tr("Use GPU acceleration"));
         gpuCheck_->setToolTip(tr("Runs detection models on the GPU when available. "
                                  "Applies from the next run."));
+        videoQualityLabel_->setText(tr("Video quality"));
+        videoQualityCombo_->setItemText(0, tr("High (near-original)"));
+        videoQualityCombo_->setItemText(1, tr("Balanced"));
+        videoQualityCombo_->setItemText(2, tr("Smaller files"));
+        videoQualityCombo_->setToolTip(tr("Quality of re-encoded videos. "
+                                          "Higher quality produces larger files."));
         if (closeButton_ != nullptr)
         {
             closeButton_->setText(tr("Close"));

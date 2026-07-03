@@ -1,4 +1,7 @@
 #include "redactly/VideoIo.hpp"
+#include "redactly/VideoProcessor.hpp"
+
+#include <atomic>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -223,6 +226,41 @@ int main(int argc, char **argv)
     else
     {
         std::puts("rotation handling: skipped (-display_rotation unsupported)");
+    }
+
+    {
+        const QString processedPath = tempDir.filePath("processed.mp4");
+        std::atomic<bool> cancelled{false};
+        qint64 lastPass2Frame = 0;
+        const auto result = redactly::processVideo(
+            *tools, samplePath, processedPath, *info, {}, nullptr, nullptr, cancelled,
+            [&](int pass, qint64 frameIndex, qint64)
+            {
+                if (pass == 2)
+                {
+                    lastPass2Frame = frameIndex;
+                }
+            });
+        assert(result.status == redactly::VideoProcessStatus::Completed);
+        assert(result.trackCount == 0);
+        assert(result.frameCount >= 55 && result.frameCount <= 65);
+        assert(lastPass2Frame == result.frameCount);
+
+        const auto processedInfo = redactly::probeVideo(*tools, processedPath, &probeError);
+        assert(processedInfo.has_value());
+        assert(processedInfo->videoCodec == "h264");
+        assert(processedInfo->hasAudio);
+        std::puts("video processor round trip: ok");
+    }
+
+    {
+        std::atomic<bool> cancelled{true};
+        const auto result = redactly::processVideo(
+            *tools, samplePath, tempDir.filePath("cancelled.mp4"), *info, {},
+            nullptr, nullptr, cancelled);
+        assert(result.status == redactly::VideoProcessStatus::Cancelled);
+        assert(!QFile::exists(tempDir.filePath("cancelled.mp4")));
+        std::puts("video processor cancellation: ok");
     }
 
     std::puts("all video io tests passed");

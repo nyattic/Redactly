@@ -1,6 +1,7 @@
 #include "redactly/ImageScanner.hpp"
 
 #include "redactly/PathUtil.hpp"
+#include "redactly/VideoIo.hpp"
 
 #include <QFileInfo>
 
@@ -39,9 +40,10 @@ namespace redactly
 
         void appendFile(std::vector<ScanResult> &results,
                         const std::filesystem::path &file,
-                        const std::filesystem::path &base)
+                        const std::filesystem::path &base,
+                        const bool includeVideos)
         {
-            if (!isSupportedImage(file))
+            if (!isSupportedImage(file) && !(includeVideos && isSupportedVideo(file)))
             {
                 return;
             }
@@ -66,6 +68,12 @@ namespace redactly
 
     std::vector<ScanResult> scanImages(const QStringList &inputs, bool recursive)
     {
+        return scanMedia(inputs, recursive, false);
+    }
+
+    std::vector<ScanResult> scanMedia(const QStringList &inputs, bool recursive,
+                                      const bool includeVideos)
+    {
         std::vector<ScanResult> results;
 
         std::unordered_set<std::string> visitedCanonical;
@@ -86,7 +94,7 @@ namespace redactly
             {
                 if (markVisited(path))
                 {
-                    appendFile(results, path, path.parent_path());
+                    appendFile(results, path, path.parent_path(), includeVideos);
                 }
                 continue;
             }
@@ -107,7 +115,7 @@ namespace redactly
                 {
                     if (it->is_regular_file(error) && markVisited(it->path()))
                     {
-                        appendFile(results, it->path(), path);
+                        appendFile(results, it->path(), path, includeVideos);
                     }
                     it.increment(error);
                 }
@@ -122,7 +130,7 @@ namespace redactly
                     }
                     if (entry.is_regular_file() && markVisited(entry.path()))
                     {
-                        appendFile(results, entry.path(), path);
+                        appendFile(results, entry.path(), path, includeVideos);
                     }
                 }
             }
