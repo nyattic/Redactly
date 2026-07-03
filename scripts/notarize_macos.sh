@@ -1,32 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Submits a signed DMG to Apple's notary service, waits for the result,
-# and staples the ticket on success.
-#
-# Credentials — choose ONE of:
-#   1. Keychain profile (RECOMMENDED — stored once, never appears on the CLI):
-#        NOTARY_PROFILE=redactly-notary
-#      Create it first with:
-#        xcrun notarytool store-credentials redactly-notary \
-#          --apple-id "you@example.com" \
-#          --team-id "ABCDE12345" \
-#          --password "app-specific-password"
-#
-#   2. Environment variables (NOT recommended for interactive shells —
-#      values passed on the command line may end up in shell history /
-#      process listings. Prefer export in a file you source, or use
-#      the keychain profile above):
-#        APPLE_ID=you@example.com
-#        TEAM_ID=ABCDE12345
-#        APP_PASSWORD=app-specific-password
-#
-# Optional:
-#   NOTARY_TIMEOUT   — seconds to wait for Apple's service (default: 3600)
-#
-# Usage:
-#   scripts/notarize_macos.sh path/to/Redactly-x.y.z-arm64.dmg
-
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <path-to-dmg>"
     exit 1
@@ -48,8 +22,6 @@ fi
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 NOTARY_TIMEOUT="${NOTARY_TIMEOUT:-3600}"
 
-# Warn (don't block) when credentials are passed via env vars — the keychain
-# profile is safer and gets the same result.
 if [[ -z "$NOTARY_PROFILE" ]]; then
     echo "⚠️  Using plaintext env-var credentials."
     echo "   Consider 'xcrun notarytool store-credentials' + NOTARY_PROFILE=<name>."
@@ -112,8 +84,6 @@ if [[ "$STATUS" != "Accepted" ]]; then
         else
             LOG_ARGS+=(--apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD")
         fi
-        # Surface the log fetch failure instead of swallowing it with `|| true`,
-        # otherwise credential errors and service outages look like a clean log.
         if ! xcrun notarytool log "$SUBMISSION_ID" "${LOG_ARGS[@]}"; then
             echo "⚠️  Could not fetch the notarization log (check credentials or submission ID)."
         fi

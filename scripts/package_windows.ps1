@@ -2,9 +2,6 @@ param(
     [string]$QtRoot = $env:QT_ROOT,
     [string]$OpenCvRoot = $env:OpenCV_DIR,
     [string]$OnnxRuntimeRoot = $env:ONNXRUNTIME_ROOT,
-    # Optional. Root of an Exiv2 install (e.g. a vcpkg installed\x64-windows tree,
-    # or an Exiv2 CMake package dir). Enables metadata preservation. When omitted,
-    # Redactly still builds, but the "Preserve original metadata" option is inert.
     [string]$Exiv2Root = $env:EXIV2_ROOT,
     [string]$Generator = "Ninja",
     [string]$BuildType = "Release"
@@ -17,17 +14,12 @@ $BuildDir = Join-Path $RootDir "build-windows"
 $DistDir = Join-Path $RootDir "dist/windows/Redactly"
 $ExePath = Join-Path $BuildDir "Redactly.exe"
 
-# ── Tool sanity ────────────────────────────────────────────────────
 foreach ($tool in @("cmake")) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
         throw "Required tool not found on PATH: $tool"
     }
 }
 
-# ── Qt root resolution ─────────────────────────────────────────────
-# Accept a wide variety of Qt install layouts (e.g. C:\Qt\6.7.0\msvc2022_64
-# or a CMake package dir like .../lib/cmake/Qt6). The canonical marker is
-# bin\qmake.exe under the kit root.
 function Resolve-QtRootPath {
     param([string]$Path)
 
@@ -41,7 +33,6 @@ function Resolve-QtRootPath {
 
     $resolved = (Resolve-Path $Path).Path
 
-    # If the path points into lib\cmake\Qt6, climb up to the kit root.
     for ($i = 0; $i -lt 4; $i++) {
         if (Test-Path (Join-Path $resolved "bin/qmake.exe")) {
             return $resolved
@@ -51,7 +42,6 @@ function Resolve-QtRootPath {
         $resolved = $parent
     }
 
-    # Final check so callers get a clear error rather than a mystery miss.
     if (Test-Path (Join-Path $resolved "bin/qmake.exe")) { return $resolved }
     return $null
 }
@@ -88,11 +78,6 @@ Write-Host "OpenCV root:      $OpenCvRoot"
 Write-Host "ONNX Runtime:     $OnnxRuntimeRoot"
 Write-Host "Exiv2 root:       $(if ($Exiv2Root) { $Exiv2Root } else { '(not provided)' })"
 
-# ── Configure + build ──────────────────────────────────────────────
-# Note: every -D argument is wrapped in double quotes so PowerShell
-# interpolates $vars. Bare `-DKEY=$var` is parsed as a parameter-style
-# token and passed through literally — which previously poisoned the
-# CMake cache with strings like "$BuildType" and broke the ninja build.
 $PrefixPathArg = ($PrefixPaths -join ";")
 cmake -S $RootDir -B $BuildDir `
     -G $Generator `
@@ -105,7 +90,6 @@ if ($LASTEXITCODE -ne 0) { throw "CMake configure failed (exit $LASTEXITCODE)" }
 cmake --build $BuildDir --config $BuildType
 if ($LASTEXITCODE -ne 0) { throw "CMake build failed (exit $LASTEXITCODE)" }
 
-# Ninja emits directly to $BuildDir; multi-config generators use $BuildDir\$BuildType.
 if (-not (Test-Path $ExePath)) {
     $ExePath = Join-Path $BuildDir "$BuildType/Redactly.exe"
 }
@@ -113,7 +97,6 @@ if (-not (Test-Path $ExePath)) {
     throw "Redactly.exe was not found after build (looked in $BuildDir and $BuildDir\$BuildType)."
 }
 
-# ── Assemble dist tree ─────────────────────────────────────────────
 if (Test-Path $DistDir) {
     Remove-Item $DistDir -Recurse -Force
 }
@@ -128,7 +111,6 @@ if (-not (Test-Path $windeployqt)) {
 & $windeployqt --release --compiler-runtime (Join-Path $DistDir "Redactly.exe")
 if ($LASTEXITCODE -ne 0) { throw "windeployqt failed (exit $LASTEXITCODE)" }
 
-# ── ONNX Runtime DLL ───────────────────────────────────────────────
 $onnxCandidates = @(
     (Join-Path $OnnxRuntimeRoot "lib/onnxruntime.dll"),
     (Join-Path $OnnxRuntimeRoot "bin/onnxruntime.dll"),
@@ -141,10 +123,6 @@ if (-not $onnxDll) {
 Copy-Item $onnxDll $DistDir -Force
 Write-Host "Bundled: $onnxDll"
 
-# ── OpenCV DLLs ────────────────────────────────────────────────────
-# Probe the usual layouts (kit root, parent, x64\...\bin, bin). Prefer
-# opencv_world*.dll (monolithic) when present, otherwise fall back to the
-# individual module DLLs. Exclude debug builds (*d.dll).
 $searchRoots = @(
     $OpenCvRoot,
     (Join-Path $OpenCvRoot ".."),
@@ -175,11 +153,6 @@ if ($worldDlls) {
     Write-Host "Bundled $(@($moduleDlls).Count) OpenCV module DLL(s)."
 }
 
-# ── Exiv2 + its dependency DLLs ────────────────────────────────────
-# Only when an Exiv2 root was provided (metadata preservation enabled).
-# vcpkg lays out exiv2.dll and its dependency DLLs (expat, brotli*, zlib1,
-# libintl/intl, inih) together under installed\x64-windows\bin, so we copy
-# exiv2.dll plus the known dependency DLLs found beside it.
 if ($Exiv2Root) {
     $exiv2SearchRoots = @(
         $Exiv2Root,
@@ -199,8 +172,6 @@ if ($Exiv2Root) {
         Copy-Item $exiv2Dll.FullName $DistDir -Force
         Write-Host "Bundled: $($exiv2Dll.FullName)"
 
-        # Copy dependency DLLs that sit next to exiv2.dll. Match on name so we
-        # don't sweep in unrelated files from a shared bin directory.
         $depPatterns = @(
             "libexiv2*.dll", "expat*.dll", "libexpat*.dll",
             "brotli*.dll", "libbrotli*.dll",
@@ -223,10 +194,6 @@ if ($Exiv2Root) {
     }
 }
 
-# ── Bundle FFmpeg ──────────────────────────────────────────────────
-# Pinned GPL build from gyan.dev (versioned URL + SHA256). The app looks for
-# ffmpeg\ffmpeg.exe and ffmpeg\ffprobe.exe next to Redactly.exe and verifies
-# each binary against its .sha256 sidecar at runtime.
 $FfmpegZipUrl = "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.0.1-essentials_build.zip"
 $FfmpegZipSha256 = "e2aaeaa0fdbc397d4794828086424d4aaa2102cef1fb6874f6ffd29c0b88b673"
 $ffmpegZip = Join-Path $BuildDir "ffmpeg-win64.zip"
@@ -255,11 +222,9 @@ foreach ($tool in @("ffmpeg.exe", "ffprobe.exe")) {
 }
 Write-Host "Bundled FFmpeg 8.0.1 (gyan.dev essentials, GPL)."
 
-# ── Third-party notices + license ──────────────────────────────────
 Copy-Item (Join-Path $RootDir "THIRD_PARTY_NOTICES.txt") $DistDir -Force
 Copy-Item (Join-Path $RootDir "LICENSE") (Join-Path $DistDir "LICENSE.txt") -Force
 
-# Guard: SCRFD models are downloaded at runtime and must never be bundled.
 if (Get-ChildItem -Path $DistDir -Recurse -Filter *.onnx -ErrorAction SilentlyContinue) {
     throw "ONNX model files found in the package; models must not be bundled."
 }

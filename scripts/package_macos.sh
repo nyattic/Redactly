@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── Config ─────────────────────────────────────────────────────────
-# Required environment variables:
-#   DEVELOPER_ID   — full name of the Developer ID Application certificate,
-#                    e.g. "Developer ID Application: Jane Doe (ABCDE12345)".
-#                    If unset, the script falls back to ad-hoc signing and
-#                    skips DMG packaging (local-only build).
-# Optional:
-#   BUNDLE_ID      — override bundle identifier (default: com.redactly.app)
-#   SKIP_DMG=1     — build + sign the .app but skip the DMG step.
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$ROOT_DIR/build-release"
 DIST_DIR="$ROOT_DIR/dist/macos"
@@ -23,7 +13,6 @@ EXECUTABLE="$MACOS_DIR/Redactly"
 ENTITLEMENTS="$ROOT_DIR/scripts/entitlements.plist"
 BUNDLE_ID="${BUNDLE_ID:-com.redactly.app}"
 
-# Required tools.
 for tool in cmake codesign macdeployqt install_name_tool otool hdiutil ditto brew; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "❌ Required tool not found: $tool"
@@ -31,8 +20,6 @@ for tool in cmake codesign macdeployqt install_name_tool otool hdiutil ditto bre
     fi
 done
 
-# Homebrew root is /opt/homebrew on Apple Silicon and /usr/local on Intel Macs;
-# query it dynamically so the script works on both.
 HOMEBREW_PREFIX="$(brew --prefix)"
 
 DEVELOPER_ID="${DEVELOPER_ID:-}"
@@ -41,7 +28,6 @@ if [[ -z "$DEVELOPER_ID" ]]; then
     SIGN_IDENTITY="-"
     DISTRIBUTABLE=0
 else
-    # Validate up front so we fail before spending minutes on packaging.
     if ! security find-identity -p codesigning -v 2>/dev/null | grep -q -F "$DEVELOPER_ID"; then
         echo "❌ Developer signing identity not found in keychain: $DEVELOPER_ID"
         echo "   Available codesigning identities:"
@@ -52,10 +38,6 @@ else
     DISTRIBUTABLE=1
 fi
 
-# ── Build ──────────────────────────────────────────────────────────
-# Include the general Homebrew prefix so find_package can locate exiv2 (and its
-# CMake config) in addition to Qt; without it a release build may silently drop
-# metadata preservation.
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$HOMEBREW_PREFIX"
@@ -67,7 +49,6 @@ ditto "$APP_PATH" "$DIST_APP"
 
 VERSION="$(plutil -extract CFBundleShortVersionString raw "$DIST_APP/Contents/Info.plist" 2>/dev/null || echo "0.0.0")"
 
-# ── Deploy Qt + bundle third-party dylibs ──────────────────────────
 macdeployqt "$DIST_APP" \
   -verbose=1 \
   -libpath="$HOMEBREW_PREFIX/lib" \
@@ -77,8 +58,6 @@ mkdir -p "$FRAMEWORKS_DIR"
 
 is_bundle_candidate() {
   local dependency="$1"
-  # Cover both Apple Silicon (/opt/homebrew) and Intel (/usr/local) Homebrew
-  # layouts, plus any custom prefix reported by `brew --prefix`.
   [[ "$dependency" == /opt/homebrew/* \
      || "$dependency" == /usr/local/* \
      || "$dependency" == "$HOMEBREW_PREFIX"/* ]]
@@ -160,11 +139,6 @@ mkdir -p "$DIST_APP/Contents/Resources"
 cp "$ROOT_DIR/THIRD_PARTY_NOTICES.txt" "$DIST_APP/Contents/Resources/THIRD_PARTY_NOTICES.txt"
 cp "$ROOT_DIR/LICENSE" "$DIST_APP/Contents/Resources/LICENSE.txt"
 
-# ── Bundle FFmpeg ──────────────────────────────────────────────────
-# Static GPL builds from https://ffmpeg.martin-riedl.de (pinned build + SHA256).
-# The app looks for Contents/Resources/ffmpeg/{ffmpeg,ffprobe} and verifies
-# each binary against its .sha256 sidecar at runtime; the sidecars are written
-# after codesigning below, because signing rewrites the binaries.
 FFMPEG_BASE_URL="https://ffmpeg.martin-riedl.de/download/macos/arm64/1783011502_8.1.2"
 FFMPEG_ZIP_SHA256="ef1aa60006c7b77ce170c1608c08d8e4ba1c30c5746f2ac986ded932d0ac2c3c"
 FFPROBE_ZIP_SHA256="c39787f4af7a3932502d2d48db6f6feaaa836b48a73ef78c32cc3285df61dfaf"
@@ -192,14 +166,11 @@ bundle_ffmpeg_tool() {
 bundle_ffmpeg_tool ffmpeg "$FFMPEG_ZIP_SHA256"
 bundle_ffmpeg_tool ffprobe "$FFPROBE_ZIP_SHA256"
 
-# Guard: SCRFD models are downloaded at runtime and must never be bundled
-# (InsightFace's models are non-commercial and are not redistributed here).
 if find "$DIST_APP" -name '*.onnx' -print -quit | grep -q .; then
     echo "❌ ONNX model files found in the app bundle; models must not be bundled."
     exit 1
 fi
 
-# ── Sign ───────────────────────────────────────────────────────────
 SIGN_FLAGS=(--force --timestamp --options runtime)
 if [[ "$DISTRIBUTABLE" == "1" ]]; then
     SIGN_FLAGS+=(--entitlements "$ENTITLEMENTS")
@@ -207,35 +178,27 @@ fi
 
 echo "🔏 Signing with: $SIGN_IDENTITY"
 
-# Sign every bundled dylib / framework binary first (deep-first order).
 while IFS= read -r item; do
   codesign "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$item"
 done < <(find "$FRAMEWORKS_DIR" -type f \( -name '*.dylib' -o -name '*.so' \) -print)
 
-# Qt plugins (macdeployqt places them in PlugIns/).
 if [[ -d "$DIST_APP/Contents/PlugIns" ]]; then
     while IFS= read -r item; do
         codesign "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$item"
     done < <(find "$DIST_APP/Contents/PlugIns" -type f \( -name '*.dylib' -o -name '*.so' \) -print)
 fi
 
-# Frameworks (bundles) need signing at the framework level.
 while IFS= read -r fw; do
   codesign "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$fw"
 done < <(find "$FRAMEWORKS_DIR" -maxdepth 1 -type d -name '*.framework' -print)
 
-# Bundled FFmpeg tools are standalone executables: sign them with the hardened
-# runtime (no app entitlements needed), then write the .sha256 sidecars from
-# the signed binaries so the runtime integrity check matches what ships.
 for tool in "$FFMPEG_DIR/ffmpeg" "$FFMPEG_DIR/ffprobe"; do
   codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$tool"
   shasum -a 256 "$tool" | awk '{print $1}' > "$tool.sha256"
 done
 
-# Finally, sign the app bundle itself (outer signature wraps everything).
 codesign "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$DIST_APP"
 
-# Verify.
 echo "🔎 Verifying signature…"
 codesign --verify --verbose=2 "$DIST_APP"
 if [[ "$DISTRIBUTABLE" == "1" ]]; then
@@ -244,7 +207,6 @@ fi
 
 echo "✅ Packaged app: $DIST_APP"
 
-# ── DMG ────────────────────────────────────────────────────────────
 if [[ "$DISTRIBUTABLE" != "1" ]]; then
     echo "ℹ️  Skipping DMG (ad-hoc signed build)."
     exit 0
