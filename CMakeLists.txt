@@ -10,7 +10,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Qt6 QUIET OPTIONAL_COMPONENTS LinguistTools Svg)
 find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
 find_package(spdlog REQUIRED)
@@ -90,38 +90,59 @@ elseif(WIN32)
     list(APPEND REDACTLY_APP_OPTIONS WIN32)
 endif()
 
-qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
-    src/main.cpp
-    src/MainWindow.cpp
-    src/ImageScanner.cpp
+add_library(redactly_core STATIC
     src/ImageIo.cpp
+    src/ImageScanner.cpp
     src/Mosaic.cpp
     src/OrtAcceleration.cpp
     src/PlateDetector.cpp
     src/ProcessorWorker.cpp
-    src/ReviewDialog.cpp
     src/ScrfdFaceDetector.cpp
-    src/SettingsDialog.cpp
-    src/Theme.cpp
     src/Tracking.cpp
-    src/UpdateChecker.cpp
     include/redactly/DetectionGeometry.hpp
     include/redactly/Detector.hpp
     include/redactly/FaceDetection.hpp
     include/redactly/ImageIo.hpp
     include/redactly/ImageScanner.hpp
-    include/redactly/MainWindow.hpp
     include/redactly/Mosaic.hpp
     include/redactly/OrtAcceleration.hpp
     include/redactly/PathSafety.hpp
+    include/redactly/PathUtil.hpp
     include/redactly/PlateDetector.hpp
     include/redactly/ProcessorWorker.hpp
-    include/redactly/ReviewDialog.hpp
     include/redactly/ReviewTypes.hpp
     include/redactly/ScrfdFaceDetector.hpp
+    include/redactly/Tracking.hpp
+)
+
+target_include_directories(redactly_core PUBLIC include)
+target_link_libraries(redactly_core PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    ${OpenCV_LIBS}
+    onnxruntime::onnxruntime
+    spdlog::spdlog
+)
+
+if(REDACTLY_EXIV2_TARGET)
+    target_link_libraries(redactly_core PUBLIC ${REDACTLY_EXIV2_TARGET})
+    target_compile_definitions(redactly_core PUBLIC REDACTLY_HAVE_EXIV2)
+    message(STATUS "Redactly: metadata preservation enabled (${REDACTLY_EXIV2_TARGET})")
+else()
+    message(WARNING "exiv2 not found; building without metadata preservation.")
+endif()
+
+qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
+    src/main.cpp
+    src/MainWindow.cpp
+    src/ReviewDialog.cpp
+    src/SettingsDialog.cpp
+    src/Theme.cpp
+    src/UpdateChecker.cpp
+    include/redactly/MainWindow.hpp
+    include/redactly/ReviewDialog.hpp
     include/redactly/SettingsDialog.hpp
     include/redactly/Theme.hpp
-    include/redactly/Tracking.hpp
     include/redactly/UpdateChecker.hpp
     ${REDACTLY_APP_RESOURCES}
 )
@@ -130,23 +151,12 @@ if(WIN32)
     target_sources(Redactly PRIVATE assets/Redactly.rc)
 endif()
 
-target_include_directories(Redactly PRIVATE include)
 target_compile_definitions(Redactly PRIVATE REDACTLY_VERSION="${PROJECT_VERSION}")
 target_link_libraries(Redactly PRIVATE
+    redactly_core
     Qt6::Widgets
     Qt6::Network
-    ${OpenCV_LIBS}
-    onnxruntime::onnxruntime
-    spdlog::spdlog
 )
-
-if(REDACTLY_EXIV2_TARGET)
-    target_link_libraries(Redactly PRIVATE ${REDACTLY_EXIV2_TARGET})
-    target_compile_definitions(Redactly PRIVATE REDACTLY_HAVE_EXIV2)
-    message(STATUS "Redactly: metadata preservation enabled (${REDACTLY_EXIV2_TARGET})")
-else()
-    message(WARNING "exiv2 not found; building without metadata preservation.")
-endif()
 
 if(TARGET Qt6::Svg)
     target_link_libraries(Redactly PRIVATE Qt6::Svg)
@@ -167,37 +177,42 @@ endif()
 # ── Security hardening ────────────────────────────────────────────
 # Opt-in compile/link flags that catch common memory-safety issues at runtime
 # and make exploitation harder. All of these are widely supported and cheap.
-if(MSVC)
-    target_compile_options(Redactly PRIVATE
-        /W4              # High warning level
-        /guard:cf        # Control Flow Guard
-        /GS              # Buffer security checks
-        /sdl             # Additional security checks
-    )
-    target_link_options(Redactly PRIVATE
-        /guard:cf
-        /DYNAMICBASE     # ASLR
-        /NXCOMPAT        # DEP
-        /HIGHENTROPYVA
-    )
-else()
-    target_compile_options(Redactly PRIVATE
-        -Wall
-        -Wextra
-        -fstack-protector-strong
-        -fno-strict-aliasing
-        $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
-    )
-    # PIE: required by most distro hardening policies and by macOS anyway.
-    set_target_properties(Redactly PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    if(NOT APPLE)
-        target_link_options(Redactly PRIVATE
-            -Wl,-z,relro
-            -Wl,-z,now
-            -Wl,-z,noexecstack
+function(redactly_harden target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE
+            /W4              # High warning level
+            /guard:cf        # Control Flow Guard
+            /GS              # Buffer security checks
+            /sdl             # Additional security checks
         )
+        target_link_options(${target} PRIVATE
+            /guard:cf
+            /DYNAMICBASE     # ASLR
+            /NXCOMPAT        # DEP
+            /HIGHENTROPYVA
+        )
+    else()
+        target_compile_options(${target} PRIVATE
+            -Wall
+            -Wextra
+            -fstack-protector-strong
+            -fno-strict-aliasing
+            $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
+        )
+        # PIE: required by most distro hardening policies and by macOS anyway.
+        set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        if(NOT APPLE)
+            target_link_options(${target} PRIVATE
+                -Wl,-z,relro
+                -Wl,-z,now
+                -Wl,-z,noexecstack
+            )
+        endif()
     endif()
-endif()
+endfunction()
+
+redactly_harden(redactly_core)
+redactly_harden(Redactly)
 
 if(APPLE)
     set_target_properties(Redactly PROPERTIES
@@ -229,15 +244,7 @@ target_link_libraries(redactly_inspect_model PRIVATE onnxruntime::onnxruntime sp
 if(BUILD_TESTING)
     add_executable(redactly_tests
         tests/test_core.cpp
-        src/ImageScanner.cpp
-        src/ImageIo.cpp
-        src/Mosaic.cpp
-        include/redactly/FaceDetection.hpp
-        include/redactly/ImageIo.hpp
-        include/redactly/ImageScanner.hpp
-        include/redactly/Mosaic.hpp
     )
-    target_include_directories(redactly_tests PRIVATE include)
     # The tests use assert() as their check mechanism, so keep assertions live
     # even in Release/RelWithDebInfo builds (which would otherwise define NDEBUG).
     if(MSVC)
@@ -245,27 +252,17 @@ if(BUILD_TESTING)
     else()
         target_compile_options(redactly_tests PRIVATE -UNDEBUG)
     endif()
-    target_link_libraries(redactly_tests PRIVATE
-        Qt6::Core
-        ${OpenCV_LIBS}
-    )
-    if(REDACTLY_EXIV2_TARGET)
-        target_link_libraries(redactly_tests PRIVATE ${REDACTLY_EXIV2_TARGET})
-        target_compile_definitions(redactly_tests PRIVATE REDACTLY_HAVE_EXIV2)
-    endif()
+    target_link_libraries(redactly_tests PRIVATE redactly_core)
     add_test(NAME redactly_tests COMMAND redactly_tests)
 
     add_executable(redactly_tracking_tests
         tests/test_tracking.cpp
-        src/Tracking.cpp
-        include/redactly/Tracking.hpp
     )
-    target_include_directories(redactly_tracking_tests PRIVATE include)
     if(MSVC)
         target_compile_options(redactly_tracking_tests PRIVATE /UNDEBUG)
     else()
         target_compile_options(redactly_tracking_tests PRIVATE -UNDEBUG)
     endif()
-    target_link_libraries(redactly_tracking_tests PRIVATE ${OpenCV_LIBS})
+    target_link_libraries(redactly_tracking_tests PRIVATE redactly_core)
     add_test(NAME redactly_tracking_tests COMMAND redactly_tracking_tests)
 endif()
