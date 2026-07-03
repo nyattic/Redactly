@@ -1,6 +1,8 @@
 #include "redactly/MainWindow.hpp"
 
 #include "redactly/ImageScanner.hpp"
+#include "redactly/ModelCatalog.hpp"
+#include "redactly/ModelDownloader.hpp"
 #include "redactly/Mosaic.hpp"
 #include "redactly/PathUtil.hpp"
 #include "redactly/PlateDetector.hpp"
@@ -45,15 +47,10 @@
 #include <QUrl>
 #include <QWidget>
 
-#include <QCryptographicHash>
 #include <QDir>
 #include <QEventLoop>
-#include <QFile>
 #include <QImageReader>
 #include <QLibraryInfo>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QProgressDialog>
@@ -65,7 +62,6 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 
 namespace redactly
@@ -76,7 +72,6 @@ namespace redactly
         constexpr double kDefaultNmsThreshold = 0.4;
         constexpr int kDefaultBlockSize = 14;
         constexpr double kDefaultPadding = 0.18;
-        constexpr qint64 kMaxCustomModelBytes = 512LL * 1024LL * 1024LL;
 
         QString defaultOutputDirectory()
         {
@@ -86,219 +81,6 @@ namespace redactly
                 return pictures + "/Redactly";
             }
             return QDir::homePath() + "/Redactly";
-        }
-
-        QString modelCacheDir()
-        {
-            const auto base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-            const auto root = base.isEmpty() ? QDir::homePath() : base;
-            return root + "/Redactly/models";
-        }
-
-        QString firstExistingModelPath(const QString &fileName)
-        {
-            const auto appDir = QCoreApplication::applicationDirPath();
-            const std::array<QString, 5> candidates = {
-                modelCacheDir() + "/" + fileName,
-                appDir + "/models/" + fileName,
-                appDir + "/../Resources/models/" + fileName,
-                appDir + "/../../../../models/" + fileName,
-                QDir::currentPath() + "/models/" + fileName,
-            };
-
-            for (const auto &candidate: candidates)
-            {
-                const QFileInfo info(QDir::cleanPath(candidate));
-                if (info.exists() && info.isFile())
-                {
-                    return info.absoluteFilePath();
-                }
-            }
-
-            return {};
-        }
-
-        struct BuiltinModel
-        {
-            QString label;
-            QString fileName;
-            QString url;
-            QString sha256;
-            qint64 approxBytes;
-        };
-
-        const std::array<BuiltinModel, 2> &builtinModels()
-        {
-            static const std::array<BuiltinModel, 2> models = {
-                BuiltinModel{
-                    "Fast  ·  SCRFD 2.5G", "2.5g_bnkps.onnx",
-                    "https://huggingface.co/RuteNL/SCRFD-face-detection-ONNX/resolve/main/2.5g_bnkps.onnx",
-                    "3f1ac54e769cb5fd76eda11ac3c088eed78d1f51a935a839d04d49b0e770219e", 3291737},
-                BuiltinModel{
-                    "Accurate  ·  SCRFD 10G", "10g_bnkps.onnx",
-                    "https://huggingface.co/RuteNL/SCRFD-face-detection-ONNX/resolve/main/10g_bnkps.onnx",
-                    "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91", 16923827},
-            };
-            return models;
-        }
-
-        const BuiltinModel &plateModel()
-        {
-            static const BuiltinModel model{
-                "License plates  ·  YOLOv9-t",
-                "yolo-v9-t-512-license-plates-end2end.onnx",
-                "https://github.com/ankandrew/open-image-models/releases/download/assets/"
-                "yolo-v9-t-512-license-plates-end2end.onnx",
-                "746fdd358ec110418775d7c9d8d07910d48b1a21471f92bf4421f6510d6daade", 7799480};
-            return model;
-        }
-
-        const BuiltinModel *findBuiltinModel(const QString &path)
-        {
-            const auto name = QFileInfo(path).fileName();
-            for (const auto &model: builtinModels())
-            {
-                if (model.fileName == name)
-                {
-                    return &model;
-                }
-            }
-            return nullptr;
-        }
-
-        bool downloadModelWithProgress(QWidget *parent, const BuiltinModel &model, const QString &destPath)
-        {
-            QNetworkAccessManager manager;
-            QNetworkRequest request{QUrl(model.url)};
-            request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                                 QNetworkRequest::NoLessSafeRedirectPolicy);
-
-            QProgressDialog progress(QCoreApplication::translate("redactly::MainWindow", "Downloading model…"),
-                                     QCoreApplication::translate("redactly::MainWindow", "Cancel"), 0, 0, parent);
-            progress.setWindowModality(Qt::WindowModal);
-            progress.setMinimumDuration(0);
-            progress.setAutoClose(false);
-            progress.setAutoReset(false);
-
-            QNetworkReply *reply = manager.get(request);
-
-            const qint64 maxBytes = std::max<qint64>(model.approxBytes * 4, 64LL * 1024 * 1024);
-            bool tooLarge = false;
-
-            QObject::connect(reply, &QNetworkReply::downloadProgress, &progress,
-                             [&progress, &tooLarge, reply, maxBytes](qint64 received, qint64 total)
-                             {
-                                 if (received > maxBytes || (total > 0 && total > maxBytes))
-                                 {
-                                     tooLarge = true;
-                                     reply->abort();
-                                     return;
-                                 }
-                                 if (total > 0)
-                                 {
-                                     progress.setMaximum(100);
-                                     progress.setValue(static_cast<int>(received * 100 / total));
-                                 }
-                             });
-
-            QEventLoop loop;
-            QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-            QObject::connect(&progress, &QProgressDialog::canceled, reply, &QNetworkReply::abort);
-            loop.exec();
-            progress.close();
-
-            if (tooLarge)
-            {
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Download Failed"),
-                                     QCoreApplication::translate("redactly::MainWindow",
-                                                                 "The download was much larger than expected and was stopped."));
-                return false;
-            }
-
-            if (reply->error() != QNetworkReply::NoError)
-            {
-                if (reply->error() != QNetworkReply::OperationCanceledError)
-                {
-                    QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Download Failed"),
-                                         QCoreApplication::translate("redactly::MainWindow", "Could not download the model.\n\n%1")
-                                             .arg(reply->errorString()));
-                }
-                return false;
-            }
-
-            const QByteArray data = reply->readAll();
-            const auto actual = QString::fromLatin1(
-                QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
-            if (actual.compare(model.sha256, Qt::CaseInsensitive) != 0)
-            {
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Download Failed"),
-                                     QCoreApplication::translate("redactly::MainWindow",
-                                                                 "The downloaded model failed its integrity check and was discarded."));
-                return false;
-            }
-
-            QDir().mkpath(QFileInfo(destPath).absolutePath());
-            const QString tempPath = destPath + ".part";
-            QFile file(tempPath);
-            if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size())
-            {
-                file.remove();
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Download Failed"),
-                                     QCoreApplication::translate("redactly::MainWindow", "Could not save the model file."));
-                return false;
-            }
-            file.close();
-            QFile::remove(destPath);
-            if (!QFile::rename(tempPath, destPath))
-            {
-                QFile::remove(tempPath);
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Download Failed"),
-                                     QCoreApplication::translate("redactly::MainWindow", "Could not save the model file."));
-                return false;
-            }
-            return true;
-        }
-
-        bool ensureBuiltinModelAvailable(QWidget *parent, const BuiltinModel &model, const QString &destPath)
-        {
-            const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
-            const auto answer = QMessageBox::question(
-                parent,
-                QCoreApplication::translate("redactly::MainWindow", "Download Model"),
-                QCoreApplication::translate("redactly::MainWindow",
-                                            "The %1 model isn't on this computer yet.\n\n"
-                                            "Redactly can download it once (%2 MB) from Hugging Face. "
-                                            "The model is provided by InsightFace for non-commercial use. "
-                                            "Your images are never uploaded.\n\nDownload now?")
-                    .arg(model.fileName, sizeMb),
-                QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::Yes);
-            if (answer != QMessageBox::Yes)
-            {
-                return false;
-            }
-            return downloadModelWithProgress(parent, model, destPath);
-        }
-
-        bool ensurePlateModelAvailable(QWidget *parent, const QString &destPath)
-        {
-            const auto &model = plateModel();
-            const auto sizeMb = QString::number(model.approxBytes / 1024.0 / 1024.0, 'f', 1);
-            const auto answer = QMessageBox::question(
-                parent,
-                QCoreApplication::translate("redactly::MainWindow", "Download Model"),
-                QCoreApplication::translate("redactly::MainWindow",
-                                            "The license plate detection model isn't on this computer yet.\n\n"
-                                            "Redactly can download it once (%1 MB) from the open-image-models "
-                                            "project (MIT-licensed). Your images are never uploaded.\n\nDownload now?")
-                    .arg(sizeMb),
-                QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::Yes);
-            if (answer != QMessageBox::Yes)
-            {
-                return false;
-            }
-            return downloadModelWithProgress(parent, model, destPath);
         }
 
         QLabel *makeSectionTitle(QWidget *parent)
@@ -321,47 +103,6 @@ namespace redactly
             auto *label = new QLabel(parent);
             label->setProperty("role", "fieldLabel");
             return label;
-        }
-
-        bool customModelFileIsAllowed(QWidget *parent, const QString &path)
-        {
-            const QFileInfo info(path);
-            if (!info.exists() || !info.isFile())
-            {
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Invalid Model"),
-                                     QCoreApplication::translate("redactly::MainWindow", "Choose an existing ONNX model file."));
-                return false;
-            }
-            if (info.suffix().compare("onnx", Qt::CaseInsensitive) != 0)
-            {
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Invalid Model"),
-                                     QCoreApplication::translate("redactly::MainWindow", "The selected model must use the .onnx extension."));
-                return false;
-            }
-            if (info.size() > kMaxCustomModelBytes)
-            {
-                QMessageBox::warning(parent, QCoreApplication::translate("redactly::MainWindow", "Model Too Large"),
-                                     QCoreApplication::translate("redactly::MainWindow",
-                                                                 "The selected ONNX file is larger than 512 MB. "
-                                                                 "Choose a smaller SCRFD model."));
-                return false;
-            }
-            return true;
-        }
-
-        bool confirmTrustedCustomModel(QWidget *parent, const QString &path)
-        {
-            const QFileInfo info(path);
-            const auto answer = QMessageBox::question(
-                parent,
-                QCoreApplication::translate("redactly::MainWindow", "Load Custom Model"),
-                QCoreApplication::translate("redactly::MainWindow",
-                                            "Only load ONNX models from sources you trust.\n\nModel: %1\nSize: %2 MB\n\nContinue?")
-                    .arg(info.fileName())
-                    .arg(QString::number(info.size() / 1024.0 / 1024.0, 'f', 1)),
-                QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::No);
-            return answer == QMessageBox::Yes;
         }
 
         QFrame *makeCard(QWidget *parent)

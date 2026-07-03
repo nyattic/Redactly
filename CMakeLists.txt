@@ -135,11 +135,15 @@ endif()
 qt_add_executable(Redactly ${REDACTLY_APP_OPTIONS}
     src/main.cpp
     src/MainWindow.cpp
+    src/ModelCatalog.cpp
+    src/ModelDownloader.cpp
     src/ReviewDialog.cpp
     src/SettingsDialog.cpp
     src/Theme.cpp
     src/UpdateChecker.cpp
     include/redactly/MainWindow.hpp
+    include/redactly/ModelCatalog.hpp
+    include/redactly/ModelDownloader.hpp
     include/redactly/ReviewDialog.hpp
     include/redactly/SettingsDialog.hpp
     include/redactly/Theme.hpp
