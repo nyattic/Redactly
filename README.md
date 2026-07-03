@@ -5,7 +5,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/nyattic/Redactly?style=flat&color=f59e0b)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-8b5cf6?style=flat)
 
-Local desktop app that automatically redacts faces and license plates in your photos. Drop in images or folders, choose what to detect, get anonymized copies — your photos are processed entirely on your machine and never uploaded.
+Local desktop app that automatically redacts faces and license plates in your photos and videos. Drop in images, videos, or folders, choose what to detect, get anonymized copies — your files are processed entirely on your machine and never uploaded.
 
 ## Install
 
@@ -19,7 +19,7 @@ The first time you use a built-in model, Redactly downloads it once (3–17 MB) 
 
 ## Use
 
-1. Drop images or folders onto the window
+1. Drop images, videos, or folders onto the window
 2. Choose what to detect — **Faces**, **License plates**, or **both**
 3. For faces, pick a model — **Fast** or **Accurate**
 4. Choose an output folder
@@ -31,11 +31,11 @@ Redactly refuses to start if two inputs would write to the same output path, so 
 
 Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp` images, and `.mp4` `.mov` `.m4v` videos (H.264/HEVC, 8-bit SDR).
 
-Videos are processed in two passes — detection with bidirectional tracking, then encoding — so faces stay covered through motion blur and brief occlusions. Output is always H.264 MP4 with the original audio, container metadata removed, and rotation baked into the pixels. Variable frame rate input is converted to a constant frame rate; 10-bit/HDR input is rejected rather than silently degraded. Video processing requires FFmpeg (bundled with packaged releases, or found on `PATH`). Videos are processed without the review step, and the video quality preset lives in Settings.
+Videos are processed in two passes — detection with bidirectional tracking, then encoding — so faces stay covered through motion blur and brief occlusions. Output is always H.264 MP4 with the original audio (re-encoded to AAC only when the source codec doesn't fit MP4), container metadata removed, and rotation baked into the pixels. Variable frame rate input is converted to a constant frame rate; 10-bit/HDR input is rejected rather than silently degraded. Video processing uses an FFmpeg bundled next to the app when present, otherwise an FFmpeg found on `PATH`. Videos are processed without the review step, and the video quality preset lives in Settings.
 
 ## Build from source
 
-Requires CMake 3.24+, a C++20 compiler, Qt 6 available to CMake (with the Linguist tools for UI translations; Qt Svg is optional and gives a crisp settings icon, falling back to a glyph without it), OpenCV 4, ONNX Runtime, spdlog, and Exiv2 (optional, for metadata preservation). The detection models (SCRFD for faces, YOLOv9 for license plates) are not build dependencies — the app downloads them on first use, or you can pre-place them (see below).
+Requires CMake 3.24+, a C++20 compiler, Qt 6 available to CMake (with the Linguist tools for UI translations; Qt Svg is optional and gives a crisp settings icon, falling back to a glyph without it), OpenCV 4, ONNX Runtime, spdlog, and Exiv2 (optional, for metadata preservation). FFmpeg is not a build dependency, but video processing needs `ffmpeg` and `ffprobe` at runtime (bundled next to the app, or on `PATH`). The detection models (SCRFD for faces, YOLOv9 for license plates) are not build dependencies — the app downloads them on first use, or you can pre-place them (see below).
 
 The built-in models are **not bundled** and **not committed** to this repository. The app downloads them on first use (with an integrity check) and caches them under the platform data directory. To pre-place them for offline use, drop them in `models/`:
 
@@ -99,11 +99,13 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+The video I/O tests exercise a real FFmpeg round trip and are skipped when FFmpeg is not installed.
+
 Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scripts/package_windows.ps1`](scripts/package_windows.ps1), [`scripts/package_linux.sh`](scripts/package_linux.sh), [`scripts/notarize_macos.sh`](scripts/notarize_macos.sh).
 
 ## Privacy
 
-Your images never leave your device — they are read from disk, processed locally, and written to the output folder you pick. Redactly makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model the first time you use each built-in model — the face models from Hugging Face, or the license plate model from the open-image-models project on GitHub — and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Advanced Options → Check for updates on startup**, and supplying your own model with **Browse…** avoids the model download entirely.
+Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. Redactly makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model the first time you use each built-in model — the face models from Hugging Face, or the license plate model from the open-image-models project on GitHub — and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Settings → Check for updates on startup**, and supplying your own model with **Browse…** avoids the model download entirely.
 
 ## License
 
@@ -119,7 +121,7 @@ Redactly is free software: you can redistribute it and/or modify it under the te
 
 **License plate model** — the built-in license plate detector is **not distributed with Redactly**; the app downloads it on first use from the [open-image-models](https://github.com/ankandrew/open-image-models) project by ankandrew, which is MIT-licensed. It is a YOLOv9-architecture model (see [Citation](#citation)) and is downloaded at runtime and cached locally, under its upstream project's terms. Confirm the current terms with the open-image-models project before any commercial or redistribution use.
 
-**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT). Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
+**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT), and FFmpeg (LGPL-2.1-or-later with optional GPL components), which is invoked as a separate process for video decoding and encoding. Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
 
 ## Citation
 

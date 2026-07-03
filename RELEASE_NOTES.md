@@ -1,3 +1,38 @@
+# Redactly 1.6.0
+
+Adds video redaction and GPU acceleration.
+
+**Videos.** Drop `.mp4`, `.mov`, or `.m4v` files (H.264/HEVC) alongside your
+photos and Redactly redacts faces and license plates in every frame. Videos
+are processed in two passes: every frame is analyzed and detections are linked
+into tracks — bidirectionally, with gap interpolation and temporal smoothing —
+so coverage holds through motion blur, side profiles, and brief occlusions;
+the second pass applies the redaction and encodes the result. Output is always
+an H.264 MP4 with the original audio (re-encoded to AAC only when the source
+codec doesn't fit MP4), container metadata — including GPS — removed, and
+rotation baked into the pixels. A **Video quality** preset in Settings picks
+between **High (near-original)**, **Balanced**, and **Smaller files**.
+
+Video processing uses the FFmpeg bundled with the app, or an FFmpeg found on
+`PATH`. Known v1 limits: variable-frame-rate input is converted to a constant
+frame rate, 10-bit/HDR input is rejected rather than silently degraded, other
+codecs and containers (VP9/AV1, WebM/MKV) are reported as unsupported, and
+videos are processed without the review step. A video in which nothing was
+detected is called out in the end-of-run summary, same as photos. Stopping a
+run mid-video removes the partial output file.
+
+**GPU acceleration.** Detection now runs on the GPU where available — CoreML
+on macOS, DirectML on Windows when the DirectML ONNX Runtime is present — with
+automatic CPU fallback and a Settings toggle (on by default). On Apple Silicon
+the face models run roughly 9–13× faster, which is also what makes per-frame
+video analysis practical.
+
+**Faster photo batches.** When review is off, images are processed in
+parallel (up to four at a time), preserving the original log and progress
+order.
+
+---
+
 # Redactly 1.5.1
 
 Polishes the Korean translation. The header subtitle drops the redundant
