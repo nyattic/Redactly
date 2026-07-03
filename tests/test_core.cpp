@@ -231,8 +231,22 @@ namespace
 
             const auto orientation = exif.findKey(Exiv2::ExifKey("Exif.Image.Orientation"));
             assert(orientation != exif.end());
+#if EXIV2_TEST_VERSION(0, 28, 0)
             assert(orientation->toInt64() == 1);
+#else
+            assert(orientation->toLong() == 1);
+#endif
         }
+    }
+
+    long exifThumbnailBytes(Exiv2::ExifData &exif)
+    {
+        Exiv2::ExifThumb thumb(exif);
+#if EXIV2_TEST_VERSION(0, 28, 0)
+        return static_cast<long>(thumb.copy().size());
+#else
+        return thumb.copy().size_;
+#endif
     }
 
     void testMetadataCopyStripsEmbeddedThumbnail()
@@ -261,8 +275,7 @@ namespace
         {
             auto image = Exiv2::ImageFactory::open(src.string());
             image->readMetadata();
-            Exiv2::ExifThumb thumb(image->exifData());
-            assert(thumb.copy().size() > 0);
+            assert(exifThumbnailBytes(image->exifData()) > 0);
         }
 
         assert(redactly::copyMetadata(src, dst, true));
@@ -270,8 +283,7 @@ namespace
         {
             auto image = Exiv2::ImageFactory::open(dst.string());
             image->readMetadata();
-            Exiv2::ExifThumb thumb(image->exifData());
-            assert(thumb.copy().size() == 0);
+            assert(exifThumbnailBytes(image->exifData()) == 0);
 
             const Exiv2::ExifData &exif = image->exifData();
             const auto artist = exif.findKey(Exiv2::ExifKey("Exif.Image.Artist"));
