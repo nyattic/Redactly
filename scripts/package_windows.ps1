@@ -123,6 +123,18 @@ if (-not $onnxDll) {
 Copy-Item $onnxDll $DistDir -Force
 Write-Host "Bundled: $onnxDll"
 
+$dmlCandidates = @(
+    (Join-Path (Split-Path $onnxDll -Parent) "DirectML.dll"),
+    (Join-Path $OnnxRuntimeRoot "runtimes/win-x64/native/DirectML.dll"),
+    (Join-Path $OnnxRuntimeRoot "bin/x64-win/DirectML.dll")
+)
+$dmlDll = $dmlCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $dmlDll) {
+    throw "DirectML.dll was not found; the release would ship without GPU acceleration. Checked:`n  $([string]::Join("`n  ", $dmlCandidates))"
+}
+Copy-Item $dmlDll $DistDir -Force
+Write-Host "Bundled: $dmlDll"
+
 $searchRoots = @(
     $OpenCvRoot,
     (Join-Path $OpenCvRoot ".."),

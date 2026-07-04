@@ -29,10 +29,15 @@ run mid-video removes the partial output file. Bundling FFmpeg grows the
 downloads by roughly 40–100 MB depending on the platform.
 
 **GPU acceleration.** Detection now runs on the GPU where available — CoreML
-on macOS, DirectML on Windows when the DirectML ONNX Runtime is present — with
-automatic CPU fallback and a Settings toggle (on by default). On Apple Silicon
+on macOS, DirectML on Windows — with automatic CPU fallback and a Settings
+toggle (on by default). The Windows release bundles the DirectML build of
+ONNX Runtime together with `DirectML.dll`, so any DirectX 12 capable GPU —
+NVIDIA, AMD, and Intel alike — is accelerated out of the box (Windows 10
+1903 or later); the log reports the backend as DirectML instead of CPU, and
+machines without a DirectX 12 GPU keep working on the CPU. On Apple Silicon
 the face models run roughly 9–13× faster, which is also what makes per-frame
-video analysis practical.
+video analysis practical. Bundling DirectML grows the Windows download by
+roughly 20 MB.
 
 **Faster photo batches.** When review is off, images are processed in
 parallel (up to four at a time), preserving the original log and progress

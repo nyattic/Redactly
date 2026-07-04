@@ -12,7 +12,7 @@ Local desktop app that automatically redacts faces and license plates in your ph
 Download from [Releases](https://github.com/nyattic/Redactly/releases/latest):
 
 - **macOS** (Apple Silicon, macOS 15+) — open the `.dmg`, drag to Applications
-- **Windows** (x64, Windows 10+) — unzip, run `Redactly.exe`
+- **Windows** (x64, Windows 10+) — unzip, run `Redactly.exe`. GPU acceleration needs Windows 10 1903+ and a DirectX 12 capable GPU (NVIDIA, AMD, or Intel); without one, detection runs on the CPU.
 - **Linux** (x86_64) — download the `.AppImage`, `chmod +x` it, and run it
 
 The first time you use a built-in model, Redactly downloads it once (3–17 MB) and caches it; after that it runs offline. The face models come from Hugging Face; the license plate model comes from the open-image-models project on GitHub.
@@ -30,6 +30,8 @@ Originals are never modified. Enable **Review each image** to inspect detections
 Redactly refuses to start if two inputs would write to the same output path, so existing results are not silently overwritten.
 
 Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp` images, and `.mp4` `.mov` `.m4v` videos (H.264/HEVC, 8-bit SDR). Video support is currently in **beta** — check the output before sharing it. On Linux the video pipeline is covered by automated tests but has not been manually tested yet.
+
+Detection runs on the GPU where available — CoreML on macOS, DirectML on Windows (bundled with the release and accelerating NVIDIA, AMD, and Intel GPUs alike) — with automatic CPU fallback and a Settings toggle (on by default).
 
 Videos are processed in two passes — detection with bidirectional tracking, then encoding — so faces stay covered through motion blur and brief occlusions. Output is always H.264 MP4 with the original audio (re-encoded to AAC only when the source codec doesn't fit MP4), container metadata removed, and rotation baked into the pixels. Variable frame rate input is converted to a constant frame rate; 10-bit/HDR input is rejected rather than silently degraded. Video processing uses an FFmpeg bundled next to the app when present, otherwise an FFmpeg found on `PATH`. Videos are processed without the review step, and the video quality preset lives in Settings.
 
@@ -72,6 +74,8 @@ cmake --build build-windows --config Release
 ```
 
 spdlog must also be discoverable by CMake — for example install it with [vcpkg](https://vcpkg.io) (`vcpkg install spdlog`) and add the vcpkg entries to `CMAKE_PREFIX_PATH`.
+
+Any ONNX Runtime build works for development, but official Windows releases use the DirectML build so detection runs on the GPU: the `Microsoft.ML.OnnxRuntime.DirectML` NuGet package staged into an `include`/`lib` layout, with `DirectML.dll` from the `Microsoft.AI.DirectML` package placed next to `onnxruntime.dll` (see the Windows job in `.github/workflows/release.yml`). `scripts/package_windows.ps1` refuses to package without `DirectML.dll`.
 
 ### Linux
 
@@ -121,7 +125,7 @@ Redactly is free software: you can redistribute it and/or modify it under the te
 
 **License plate model** — the built-in license plate detector is **not distributed with Redactly**; the app downloads it on first use from the [open-image-models](https://github.com/ankandrew/open-image-models) project by ankandrew, which is MIT-licensed. It is a YOLOv9-architecture model (see [Citation](#citation)) and is downloaded at runtime and cached locally, under its upstream project's terms. Confirm the current terms with the open-image-models project before any commercial or redistribution use.
 
-**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT), and FFmpeg (LGPL-2.1-or-later with optional GPL components), which is invoked as a separate process for video decoding and encoding. Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
+**Third-party runtime dependencies** — Qt (LGPL-3.0 / GPL-3.0 / commercial), OpenCV (Apache-2.0), ONNX Runtime (MIT), DirectML (proprietary Microsoft license permitting redistribution; bundled with Windows releases only, as `DirectML.dll`), Exiv2 (GPL-2.0-or-later) with its own dependencies (Brotli, Expat, inih, zlib, GNU gettext), spdlog and {fmt} (MIT), and FFmpeg (LGPL-2.1-or-later with optional GPL components), which is invoked as a separate process for video decoding and encoding. Each retains its own license; the full texts are in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and are bundled with each release.
 
 ## Citation
 
