@@ -150,6 +150,10 @@ namespace redactly
         }
         active.track.boxes.push_back({frame, detection.box, detection.score, false});
         active.lastFrame = frame;
+        if (detection.score >= config_.highScoreThreshold)
+        {
+            active.lastHighScoreFrame = frame;
+        }
     }
 
     void ByteTracker::update(int frame, const FaceDetections &detections)
@@ -165,7 +169,8 @@ namespace redactly
 
         std::erase_if(active_, [&](ActiveTrack &active)
         {
-            if (frame - active.lastFrame > config_.maxFramesLost)
+            if (frame - active.lastFrame > config_.maxFramesLost
+                || frame - active.lastHighScoreFrame > config_.maxFramesSinceHighScore)
             {
                 finished_.push_back(std::move(active.track));
                 return true;
@@ -224,6 +229,7 @@ namespace redactly
             fresh.track.boxes.push_back({frame, detections[detectionIndex].box,
                                          detections[detectionIndex].score, false});
             fresh.lastFrame = frame;
+            fresh.lastHighScoreFrame = frame;
             active_.push_back(std::move(fresh));
         }
     }
@@ -456,6 +462,18 @@ namespace redactly
     void postProcessTracks(std::vector<Track> &tracks, const TrackPostProcessConfig &config,
                            int frameCount, const SceneCuts &cuts)
     {
+        std::erase_if(tracks, [&](const Track &track)
+        {
+            int strong = 0;
+            for (const auto &tracked: track.boxes)
+            {
+                if (!tracked.interpolated && tracked.score >= config.strongScoreThreshold)
+                {
+                    ++strong;
+                }
+            }
+            return strong < config.minStrongDetections;
+        });
         for (auto &track: tracks)
         {
             interpolateGaps(track, config.maxInterpolationGap, cuts);

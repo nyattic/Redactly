@@ -99,6 +99,36 @@ namespace
         assert(lowOnly.empty());
     }
 
+    void testLowConfidenceCoastingExpires()
+    {
+        auto sequence = movingObjectSequence(60, 50.0F, 0.0F, 100.0F, 0.2F);
+        for (int frame = 0; frame <= 4; ++frame)
+        {
+            sequence[frame][0].score = 0.9F;
+        }
+
+        const auto tracks = redactly::buildTracks(sequence);
+        assert(tracks.size() == 1);
+        assert(tracks[0].lastFrame() == 34);
+    }
+
+    void testTracksWithFewStrongDetectionsAreDropped()
+    {
+        auto weak = movingObjectSequence(20, 50.0F, 5.0F, 100.0F, 0.2F);
+        weak[3][0].score = 0.9F;
+        weak[4][0].score = 0.9F;
+        auto weakTracks = redactly::buildBidirectionalTracks(weak);
+        assert(weakTracks.size() == 1);
+        redactly::postProcessTracks(weakTracks, {}, 20);
+        assert(weakTracks.empty());
+
+        auto solid = movingObjectSequence(20, 50.0F, 5.0F);
+        auto solidTracks = redactly::buildBidirectionalTracks(solid);
+        assert(solidTracks.size() == 1);
+        redactly::postProcessTracks(solidTracks, {}, 20);
+        assert(solidTracks.size() == 1);
+    }
+
     void testCrossingObjectsKeepTwoTracks()
     {
         std::vector<redactly::FaceDetections> sequence(21);
@@ -386,6 +416,8 @@ int main()
     testGapInterpolationFillsMissedFrames();
     testGapLargerThanLimitIsNotInterpolated();
     testLowConfidenceDetectionsExtendButNeverStartTracks();
+    testLowConfidenceCoastingExpires();
+    testTracksWithFewStrongDetectionsAreDropped();
     testCrossingObjectsKeepTwoTracks();
     testBidirectionalMergeProducesSingleTrack();
     testBackwardPassRecoversLowConfidenceStart();

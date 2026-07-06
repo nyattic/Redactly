@@ -33,6 +33,7 @@ namespace redactly
         float lowScoreThreshold = 0.1F;
         float iouThreshold = 0.3F;
         int maxFramesLost = 30;
+        int maxFramesSinceHighScore = 30;
         float velocityBlend = 0.3F;
     };
 
@@ -51,6 +52,7 @@ namespace redactly
             Track track;
             cv::Point2f velocity{0.0F, 0.0F};
             int lastFrame = 0;
+            int lastHighScoreFrame = 0;
 
             [[nodiscard]] cv::Rect2f predictedBox(int frame) const;
         };
@@ -66,9 +68,11 @@ namespace redactly
 
     struct TrackPostProcessConfig
     {
-        int maxInterpolationGap = 30;
+        int maxInterpolationGap = 12;
         int smoothingRadius = 2;
         int extensionFrames = 3;
+        float strongScoreThreshold = 0.5F;
+        int minStrongDetections = 3;
     };
 
     [[nodiscard]] std::vector<Track> buildTracks(const std::vector<FaceDetections> &frameDetections,

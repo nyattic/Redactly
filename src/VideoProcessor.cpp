@@ -165,9 +165,13 @@ namespace redactly
         spdlog::info("Video scene cuts detected: {}", sceneCuts.frames().size());
 
         TrackerConfig trackerConfig = options.tracker;
-        trackerConfig.highScoreThreshold = options.scoreThreshold;
+        trackerConfig.highScoreThreshold =
+                std::min(options.scoreThreshold,
+                         std::max(0.35F, options.scoreThreshold - 0.1F));
         auto tracks = buildBidirectionalTracks(frameDetections, trackerConfig, 0.5F, sceneCuts);
-        postProcessTracks(tracks, options.postProcess, static_cast<int>(frameCount), sceneCuts);
+        TrackPostProcessConfig postProcess = options.postProcess;
+        postProcess.strongScoreThreshold = trackerConfig.highScoreThreshold;
+        postProcessTracks(tracks, postProcess, static_cast<int>(frameCount), sceneCuts);
         scaleTracksToNative(tracks, scaleX, scaleY);
         result.trackCount = static_cast<int>(tracks.size());
         frameDetections.clear();
