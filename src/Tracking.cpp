@@ -48,6 +48,29 @@ namespace redactly
             return scale > 0.0F && perFrame > kMaxShiftPerFrame * scale;
         }
 
+        bool sizeJumpTooLarge(const cv::Rect2f &from, const cv::Rect2f &to, int gap)
+        {
+            constexpr float kMaxDimensionRatio = 1.6F;
+            constexpr float kMaxAreaRatio = 2.0F;
+            constexpr float kPerFrameSlack = 0.05F;
+            constexpr float kMaxDimensionRatioCap = 2.4F;
+            constexpr float kMaxAreaRatioCap = 4.5F;
+
+            if (from.width <= 0.0F || from.height <= 0.0F
+                || to.width <= 0.0F || to.height <= 0.0F)
+            {
+                return true;
+            }
+            const float slack = 1.0F + kPerFrameSlack * static_cast<float>(std::max(0, gap - 1));
+            const float dimensionLimit = std::min(kMaxDimensionRatioCap, kMaxDimensionRatio * slack);
+            const float areaLimit = std::min(kMaxAreaRatioCap, kMaxAreaRatio * slack * slack);
+            const float widthRatio = std::max(to.width / from.width, from.width / to.width);
+            const float heightRatio = std::max(to.height / from.height, from.height / to.height);
+            const float areaRatio = std::max(to.area() / from.area(), from.area() / to.area());
+            return widthRatio > dimensionLimit || heightRatio > dimensionLimit
+                   || areaRatio > areaLimit;
+        }
+
         struct Match
         {
             size_t trackIndex;
@@ -56,6 +79,8 @@ namespace redactly
         };
 
         std::vector<Match> greedyIouMatches(const std::vector<cv::Rect2f> &predictions,
+                                            const std::vector<cv::Rect2f> &lastBoxes,
+                                            const std::vector<int> &gaps,
                                             const std::vector<size_t> &trackIndices,
                                             const FaceDetections &detections,
                                             const std::vector<size_t> &detectionIndices,
@@ -68,7 +93,10 @@ namespace redactly
                 {
                     const float iou = intersectionOverUnion(predictions[trackIndex],
                                                             detections[detectionIndex].box);
-                    if (iou >= iouThreshold)
+                    if (iou >= iouThreshold
+                        && !sizeJumpTooLarge(lastBoxes[trackIndex],
+                                             detections[detectionIndex].box,
+                                             gaps[trackIndex]))
                     {
                         candidates.push_back({trackIndex, detectionIndex, iou});
                     }
@@ -185,10 +213,14 @@ namespace redactly
         });
 
         std::vector<cv::Rect2f> predictions(active_.size());
+        std::vector<cv::Rect2f> lastBoxes(active_.size());
+        std::vector<int> gaps(active_.size());
         std::vector<size_t> unmatchedTracks(active_.size());
         for (size_t i = 0; i < active_.size(); ++i)
         {
             predictions[i] = active_[i].predictedBox(frame);
+            lastBoxes[i] = active_[i].track.boxes.back().box;
+            gaps[i] = frame - active_[i].lastFrame;
             unmatchedTracks[i] = i;
         }
 
@@ -211,8 +243,9 @@ namespace redactly
             std::erase(indices, value);
         };
 
-        const auto highMatches = greedyIouMatches(predictions, unmatchedTracks, detections,
-                                                  highDetections, config_.iouThreshold);
+        const auto highMatches = greedyIouMatches(predictions, lastBoxes, gaps, unmatchedTracks,
+                                                  detections, highDetections,
+                                                  config_.iouThreshold);
         for (const auto &match: highMatches)
         {
             extendTrack(active_[match.trackIndex], frame, detections[match.detectionIndex]);
@@ -220,8 +253,9 @@ namespace redactly
             removeMatched(highDetections, match.detectionIndex);
         }
 
-        const auto lowMatches = greedyIouMatches(predictions, unmatchedTracks, detections,
-                                                 lowDetections, config_.iouThreshold);
+        const auto lowMatches = greedyIouMatches(predictions, lastBoxes, gaps, unmatchedTracks,
+                                                 detections, lowDetections,
+                                                 config_.iouThreshold);
         for (const auto &match: lowMatches)
         {
             extendTrack(active_[match.trackIndex], frame, detections[match.detectionIndex]);
@@ -362,7 +396,8 @@ namespace redactly
 
             const int gap = next.frame - current.frame - 1;
             if (gap < 1 || gap > maxGap || cuts.spansCut(current.frame, next.frame)
-                || gapMotionTooFast(current.box, next.box, gap))
+                || gapMotionTooFast(current.box, next.box, gap)
+                || sizeJumpTooLarge(current.box, next.box, gap))
             {
                 continue;
             }
@@ -415,14 +450,18 @@ namespace redactly
             const float inverse = 1.0F / static_cast<float>(count);
             const cv::Rect2f smoothed{accumulated.x * inverse, accumulated.y * inverse,
                                       accumulated.width * inverse, accumulated.height * inverse};
+            constexpr float kMaxSmoothingAreaGrowth = 1.25F;
+            const float originalArea = original[i].box.area();
             if (original[i].interpolated)
             {
-                track.boxes[i].box = smoothed;
+                track.boxes[i].box =
+                        (originalArea > 0.0F &&
+                         smoothed.area() > originalArea * kMaxSmoothingAreaGrowth)
+                            ? original[i].box
+                            : smoothed;
                 continue;
             }
-            constexpr float kMaxSmoothingAreaGrowth = 1.25F;
             const cv::Rect2f covered = boxUnion(smoothed, original[i].box);
-            const float originalArea = original[i].box.area();
             track.boxes[i].box =
                     (originalArea > 0.0F &&
                      covered.area() > originalArea * kMaxSmoothingAreaGrowth)

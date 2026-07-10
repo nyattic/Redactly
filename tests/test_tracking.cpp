@@ -438,6 +438,63 @@ namespace
         const auto cuts = detector.finish();
         assert(cuts.frames() == std::vector<int>({5}));
     }
+
+    void testSizeJumpStartsNewTrackInsteadOfAssociating()
+    {
+        std::vector<redactly::FaceDetections> sequence(8);
+        for (int frame = 0; frame < 4; ++frame)
+        {
+            sequence[frame].push_back({cv::Rect2f(100.0F, 100.0F, 100.0F, 100.0F), 0.9F});
+        }
+        for (int frame = 4; frame < 8; ++frame)
+        {
+            sequence[frame].push_back({cv::Rect2f(65.0F, 65.0F, 170.0F, 170.0F), 0.9F});
+        }
+        const auto tracks = redactly::buildTracks(sequence);
+        assert(tracks.size() == 2);
+        for (const auto &track: tracks)
+        {
+            for (const auto &tracked: track.boxes)
+            {
+                assert(tracked.box.width == track.boxes.front().box.width);
+            }
+        }
+    }
+
+    void testGradualGrowthKeepsOneTrack()
+    {
+        std::vector<redactly::FaceDetections> sequence(10);
+        float size = 40.0F;
+        for (int frame = 0; frame < 10; ++frame)
+        {
+            const float half = size * 0.5F;
+            sequence[frame].push_back({cv::Rect2f(150.0F - half, 150.0F - half, size, size), 0.9F});
+            size *= 1.1F;
+        }
+        assert(redactly::buildTracks(sequence).size() == 1);
+    }
+
+    void testInterpolationSkipsAcrossSizeJump()
+    {
+        redactly::Track track;
+        track.boxes.push_back({0, cv::Rect2f(100.0F, 100.0F, 40.0F, 40.0F), 0.9F, false});
+        track.boxes.push_back({5, cv::Rect2f(60.0F, 60.0F, 160.0F, 160.0F), 0.9F, false});
+        redactly::interpolateGaps(track, 10);
+        assert(track.boxes.size() == 2);
+    }
+
+    void testSmoothingDoesNotInflateInterpolatedBoxes()
+    {
+        redactly::Track track;
+        track.boxes.push_back({0, cv::Rect2f(0.0F, 0.0F, 200.0F, 200.0F), 0.9F, false});
+        track.boxes.push_back({1, cv::Rect2f(75.0F, 75.0F, 50.0F, 50.0F), 0.9F, true});
+        track.boxes.push_back({2, cv::Rect2f(0.0F, 0.0F, 200.0F, 200.0F), 0.9F, false});
+
+        redactly::smoothTrack(track, 2);
+
+        const float maxArea = 50.0F * 50.0F * 1.25F;
+        assert(track.boxes[1].box.area() <= maxArea + 0.001F);
+    }
 }
 
 int main()
@@ -466,6 +523,10 @@ int main()
     testSceneCutDetectorIgnoresFlash();
     testSceneCutDetectorIgnoresStaticScene();
     testSceneCutDetectorCommitsTrailingCandidate();
+    testSizeJumpStartsNewTrackInsteadOfAssociating();
+    testGradualGrowthKeepsOneTrack();
+    testInterpolationSkipsAcrossSizeJump();
+    testSmoothingDoesNotInflateInterpolatedBoxes();
     std::puts("tracking tests passed");
     return 0;
 }
