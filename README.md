@@ -25,6 +25,10 @@ The first time you use a built-in model, Redactly downloads it once (3–17 MB) 
 4. Choose an output folder
 5. Click **Start**
 
+Faces and plates can be hidden with pixelation, Gaussian blur, solid fill, or a
+friendly built-in smiley sticker. Sticker rendering is bundled and consistent
+across platforms; it does not use the operating system's emoji font.
+
 Originals are never modified. Enable **Review each image** to inspect detections before saving, exclude false positives, add missed faces, leave an image unsaved, or explicitly copy the original.
 
 Redactly refuses to start if two inputs would write to the same output path or if any planned output already exists, so results are never silently overwritten. Move or rename existing results before running the same batch again.

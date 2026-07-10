@@ -587,11 +587,13 @@ namespace redactly
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Mosaic));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Blur));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Fill));
+            methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Sticker));
             addRetranslation([this]
                              {
                                  methodCombo_->setItemText(0, tr("Mosaic (pixelate)"));
                                  methodCombo_->setItemText(1, tr("Gaussian blur"));
                                  methodCombo_->setItemText(2, tr("Solid fill (blackout)"));
+                                 methodCombo_->setItemText(3, tr("Sticker (smiley)"));
                              });
             addRetranslation([this]
                              {
@@ -599,7 +601,8 @@ namespace redactly
                                      "How detected faces are obscured.\n"
                                      "Mosaic = pixelation (block size below).\n"
                                      "Gaussian blur = strong smoothing scaled to face size.\n"
-                                     "Solid fill = opaque black box, irreversible. Default: Mosaic"));
+                                     "Solid fill = opaque black box, irreversible.\n"
+                                     "Sticker = a friendly opaque smiley. Default: Mosaic"));
                              });
 
             shapeCombo_ = new QComboBox(advancedBody_);
@@ -726,7 +729,11 @@ namespace redactly
             connect(advancedToggle_, &QToolButton::toggled, this, &MainWindow::toggleAdvanced);
             connect(resetButton, &QPushButton::clicked, this, &MainWindow::resetAdvancedDefaults);
             connect(methodCombo_, &QComboBox::currentIndexChanged, this,
-                    [this]{ updateAnonymizationSample(); });
+                    [this]
+                    {
+                        updateAnonymizationControls();
+                        updateAnonymizationSample();
+                    });
             connect(shapeCombo_, &QComboBox::currentIndexChanged, this,
                     [this]{ updateAnonymizationSample(); });
             connect(softEdgeCheck_, &QCheckBox::toggled, this,
@@ -735,6 +742,7 @@ namespace redactly
                     [this]{ updateAnonymizationSample(); });
             connect(paddingSpin_, &QDoubleSpinBox::valueChanged, this,
                     [this]{ updateAnonymizationSample(); });
+            updateAnonymizationControls();
             updateAnonymizationSample();
 
             root->addWidget(card);
@@ -1529,6 +1537,29 @@ namespace redactly
             softEdgeCheck_->isChecked()));
     }
 
+    void MainWindow::updateAnonymizationControls() const
+    {
+        if (methodCombo_ == nullptr)
+        {
+            return;
+        }
+        const auto method = static_cast<AnonymizationMethod>(
+            methodCombo_->currentData().toInt());
+        const bool sticker = method == AnonymizationMethod::Sticker;
+        if (shapeCombo_ != nullptr)
+        {
+            shapeCombo_->setEnabled(!sticker);
+        }
+        if (softEdgeCheck_ != nullptr)
+        {
+            softEdgeCheck_->setEnabled(!sticker);
+        }
+        if (blockSizeSpin_ != nullptr)
+        {
+            blockSizeSpin_->setEnabled(method == AnonymizationMethod::Mosaic);
+        }
+    }
+
     void MainWindow::updateSettingsIcon() const
     {
         if (settingsButton_ == nullptr)
@@ -1633,6 +1664,7 @@ namespace redactly
 
         if (!processing)
         {
+            updateAnonymizationControls();
             const bool facesNeeded = detectCombo_->currentData().toString() != "plates";
             modelCombo_->setEnabled(facesNeeded);
             modelPathEdit_->setEnabled(facesNeeded);

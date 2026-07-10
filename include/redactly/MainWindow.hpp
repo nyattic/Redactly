@@ -100,6 +100,8 @@ namespace redactly
 
         void updateAnonymizationSample() const;
 
+        void updateAnonymizationControls() const;
+
         [[nodiscard]] QStringList inputPaths() const;
 
         void appendLog(const QString &message) const;

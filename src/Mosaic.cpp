@@ -82,6 +82,79 @@ namespace redactly
             roi.setTo(cv::Scalar(0, 0, 0));
         }
 
+        int availableInsetFor(const cv::Rect &region, const cv::Rect &detected)
+        {
+            return std::max(0, std::min({detected.x - region.x,
+                                        detected.y - region.y,
+                                        region.x + region.width - detected.x - detected.width,
+                                        region.y + region.height - detected.y - detected.height}));
+        }
+
+        void fillRoundedRectangle(cv::Mat image, const cv::Rect &rect, int radius,
+                                  const cv::Scalar &color)
+        {
+            radius = std::clamp(radius, 0, std::min(rect.width, rect.height) / 2);
+            if (radius == 0)
+            {
+                cv::rectangle(image, rect, color, cv::FILLED, cv::LINE_AA);
+                return;
+            }
+
+            cv::rectangle(image,
+                          cv::Rect(rect.x + radius, rect.y,
+                                   rect.width - 2 * radius, rect.height),
+                          color, cv::FILLED, cv::LINE_AA);
+            cv::rectangle(image,
+                          cv::Rect(rect.x, rect.y + radius,
+                                   rect.width, rect.height - 2 * radius),
+                          color, cv::FILLED, cv::LINE_AA);
+            for (const cv::Point center: {
+                     cv::Point(rect.x + radius, rect.y + radius),
+                     cv::Point(rect.x + rect.width - radius - 1, rect.y + radius),
+                     cv::Point(rect.x + radius, rect.y + rect.height - radius - 1),
+                     cv::Point(rect.x + rect.width - radius - 1,
+                               rect.y + rect.height - radius - 1)})
+            {
+                cv::circle(image, center, radius, color, cv::FILLED, cv::LINE_AA);
+            }
+        }
+
+        void stickerRegion(cv::Mat roi, int radiusLimit)
+        {
+            const int minEdge = std::min(roi.cols, roi.rows);
+            if (minEdge < 3)
+            {
+                roi.setTo(cv::Scalar(40, 190, 245, 255));
+                return;
+            }
+
+            const int outline = std::max(1, minEdge / 28);
+            const int radius = std::clamp(minEdge / 5, 0, std::max(0, radiusLimit));
+            const cv::Rect outer(0, 0, roi.cols, roi.rows);
+            fillRoundedRectangle(roi, outer, radius, cv::Scalar(35, 45, 55, 255));
+
+            const cv::Rect face(outline, outline,
+                                std::max(1, roi.cols - 2 * outline),
+                                std::max(1, roi.rows - 2 * outline));
+            fillRoundedRectangle(roi, face, std::max(0, radius - outline),
+                                 cv::Scalar(45, 205, 250, 255));
+
+            const int eyeRadius = std::max(1, minEdge / 14);
+            const int eyeY = static_cast<int>(std::lround(roi.rows * 0.39));
+            const int leftEyeX = static_cast<int>(std::lround(roi.cols * 0.34));
+            const int rightEyeX = static_cast<int>(std::lround(roi.cols * 0.66));
+            const cv::Scalar ink(30, 40, 50, 255);
+            cv::circle(roi, {leftEyeX, eyeY}, eyeRadius, ink, cv::FILLED, cv::LINE_AA);
+            cv::circle(roi, {rightEyeX, eyeY}, eyeRadius, ink, cv::FILLED, cv::LINE_AA);
+
+            const cv::Point mouthCenter(roi.cols / 2,
+                                        static_cast<int>(std::lround(roi.rows * 0.56)));
+            const cv::Size mouthAxes(std::max(2, roi.cols / 5),
+                                     std::max(2, roi.rows / 7));
+            cv::ellipse(roi, mouthCenter, mouthAxes, 0.0, 18.0, 162.0, ink,
+                        std::max(1, minEdge / 22), cv::LINE_AA);
+        }
+
         constexpr float kInnerTransitionRatio = 0.12F;
         constexpr float kOuterTransitionRatio = 0.10F;
         constexpr int kMinOuterTransition = 4;
@@ -97,12 +170,7 @@ namespace redactly
 
         int innerTransitionFor(const cv::Rect &region, const cv::Rect &detected)
         {
-            const int available = std::max(0, std::min({detected.x - region.x,
-                                                       detected.y - region.y,
-                                                       region.x + region.width
-                                                           - detected.x - detected.width,
-                                                       region.y + region.height
-                                                           - detected.y - detected.height}));
+            const int available = availableInsetFor(region, detected);
             const int target = static_cast<int>(std::lround(
                 static_cast<float>(std::min(region.width, region.height))
                 * kInnerTransitionRatio));
@@ -216,6 +284,9 @@ namespace redactly
             case AnonymizationMethod::Fill:
                 fillRegion(roi);
                 break;
+            case AnonymizationMethod::Sticker:
+                stickerRegion(roi, std::min(roi.cols, roi.rows) / 5);
+                break;
             case AnonymizationMethod::Mosaic:
             default:
                 mosaicRegion(roi, blockSize);
@@ -240,6 +311,13 @@ namespace redactly
         for (const auto &detection: detections)
         {
             const cv::Rect roiRect = paddedRegion(detection.box, width, height, paddingRatio);
+
+            if (method == AnonymizationMethod::Sticker)
+            {
+                const cv::Rect detectedRect = paddedRegion(detection.box, width, height, 0.0F);
+                stickerRegion(image(roiRect), availableInsetFor(roiRect, detectedRect) * 2);
+                continue;
+            }
 
             if (softEdges)
             {

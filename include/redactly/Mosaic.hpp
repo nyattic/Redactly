@@ -11,6 +11,7 @@ namespace redactly
         Mosaic,
         Blur,
         Fill,
+        Sticker,
     };
 
     enum class MaskShape

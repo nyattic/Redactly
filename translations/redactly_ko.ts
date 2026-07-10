@@ -342,15 +342,21 @@ On: copies EXIF/IPTC/XMP and the ICC color profile from the original, and preser
         <translation>단색 채우기(블랙아웃)</translation>
     </message>
     <message>
+        <source>Sticker (smiley)</source>
+        <translation>스티커(웃는 얼굴)</translation>
+    </message>
+    <message>
         <location filename="../src/MainWindow.cpp" line="738"/>
         <source>How detected faces are obscured.
 Mosaic = pixelation (block size below).
 Gaussian blur = strong smoothing scaled to face size.
-Solid fill = opaque black box, irreversible. Default: Mosaic</source>
+Solid fill = opaque black box, irreversible.
+Sticker = a friendly opaque smiley. Default: Mosaic</source>
         <translation>감지된 얼굴을 가리는 방식입니다.
 모자이크 = 픽셀화(아래 블록 크기).
 가우시안 블러 = 얼굴 크기에 맞춘 강한 흐림.
-단색 채우기 = 불투명한 검은 상자, 복원 불가. 기본값: 모자이크</translation>
+단색 채우기 = 불투명한 검은 상자, 복원 불가.
+스티커 = 친근한 불투명 웃는 얼굴. 기본값: 모자이크</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="752"/>
