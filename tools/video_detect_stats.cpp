@@ -67,12 +67,18 @@ int main(int argc, char **argv)
     const QString videoPath = QString::fromLocal8Bit(argv[2]);
     const float userThreshold = argc > 3 ? std::stof(argv[3]) : 0.5F;
     QString renderPath;
+    bool accelerate = false;
     std::vector<int> keyFrames;
     for (int i = 4; i < argc; ++i)
     {
         if (std::string(argv[i]) == "--render" && i + 1 < argc)
         {
             renderPath = QString::fromLocal8Bit(argv[++i]);
+            continue;
+        }
+        if (std::string(argv[i]) == "--accel")
+        {
+            accelerate = true;
             continue;
         }
         keyFrames.push_back(std::stoi(argv[i]));
@@ -101,7 +107,8 @@ int main(int argc, char **argv)
         options.shape = redactly::MaskShape::Ellipse;
         options.softEdges = true;
         options.paddingRatio = 0.18F;
-        redactly::YunetFaceDetector detector(modelPath, 960, false);
+        redactly::YunetFaceDetector detector(modelPath, 960, accelerate);
+        std::printf("backend=%s\n", redactly::ortAcceleratorName(detector.accelerator()));
         const float detectionThreshold =
                 std::min(options.tracker.lowScoreThreshold, options.scoreThreshold);
         std::atomic<bool> cancelled{false};
@@ -131,7 +138,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    redactly::YunetFaceDetector detector(modelPath, 960, false);
+    redactly::YunetFaceDetector detector(modelPath, 960, accelerate);
+    std::printf("backend=%s\n", redactly::ortAcceleratorName(detector.accelerator()));
     const float detectionThreshold =
             std::min(options.tracker.lowScoreThreshold, options.scoreThreshold);
 
