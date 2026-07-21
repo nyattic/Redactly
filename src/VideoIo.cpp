@@ -37,7 +37,7 @@ namespace redactly
         constexpr int kProcessStartTimeoutMs = 15000;
         constexpr int kProcessStopTimeoutMs = 2000;
         constexpr int kProcessIoTimeoutMs = 60000;
-        constexpr int kProcessFinishTimeoutMs = 300000;
+        constexpr int kProcessFinishTimeoutMs = 900000;
 #if defined(_WIN32)
         constexpr qint64 kDecodeBufferBytes = 64LL * 1024 * 1024;
 #endif
@@ -898,6 +898,7 @@ namespace redactly
         }
         arguments << "-map_metadata" << "-1"
                   << "-map_chapters" << "-1"
+                  << "-movflags" << "+faststart"
                   << "-f" << "mp4"
                   << tempPath_;
 

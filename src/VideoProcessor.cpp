@@ -412,9 +412,24 @@ namespace redactly
             const auto current = captureVideoSourceSnapshot(processingSource);
             return current && *current == *processingSnapshot;
         };
+        auto lastSourceCheck = std::chrono::steady_clock::time_point{};
         const auto canContinue = [&]()
         {
-            return !cancelled.load(std::memory_order_acquire) && sourceIsUnchanged();
+            if (cancelled.load(std::memory_order_acquire))
+            {
+                return false;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (now - lastSourceCheck < std::chrono::milliseconds(500))
+            {
+                return true;
+            }
+            if (!sourceIsUnchanged())
+            {
+                return false;
+            }
+            lastSourceCheck = now;
+            return true;
         };
 
         QString probeError;

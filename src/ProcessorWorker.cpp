@@ -1257,7 +1257,10 @@ namespace redactly
 
     void ProcessorWorker::cancel()
     {
-        cancelled_.store(true, std::memory_order_release);
+        {
+            const std::lock_guard<std::mutex> lock(imageMemoryMutex_);
+            cancelled_.store(true, std::memory_order_release);
+        }
         imageMemoryCv_.notify_all();
     }
 }
