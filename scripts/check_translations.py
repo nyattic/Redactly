@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Validate Qt TS catalogs without requiring Qt Linguist Tools."""
-
 from __future__ import annotations
 
 import re
