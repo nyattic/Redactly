@@ -6,7 +6,7 @@ if(APPLE AND (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR
         "Minimum supported macOS version" FORCE)
 endif()
 
-project(Redactly VERSION 1.10.0 LANGUAGES CXX)
+project(Redactly VERSION 1.10.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
