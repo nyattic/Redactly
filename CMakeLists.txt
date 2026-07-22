@@ -6,7 +6,7 @@ if(APPLE AND (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR
         "Minimum supported macOS version" FORCE)
 endif()
 
-project(CloakFrame VERSION 1.10.2 LANGUAGES CXX)
+project(CloakFrame VERSION 1.10.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -20,6 +20,7 @@ namespace cloakframe
         int mosaicBlockSize = 14;
         float paddingRatio = 0.18F;
         AnonymizationMethod method = AnonymizationMethod::Mosaic;
+        cv::Mat customImage;
         MaskShape shape = MaskShape::Rectangle;
         bool softEdges = false;
         int crf = 18;

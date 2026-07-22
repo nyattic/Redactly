@@ -327,8 +327,8 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
         </message>
         <message>
             <location filename="../src/MainWindow.cpp" line="724" />
-            <source>Tweak detection and mosaic behavior. Defaults work for most photos.</source>
-            <translation>Tweak detection and mosaic behavior. Defaults work for most photos.</translation>
+            <source>Tweak detection and anonymization behavior. Defaults work for most photos.</source>
+            <translation>検出と匿名化の動作を調整します。ほとんどの写真では既定値で十分です。</translation>
         </message>
         <message>
             <location filename="../src/MainWindow.cpp" line="732" />
@@ -346,22 +346,21 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
             <translation>塗りつぶし（黒塗り）</translation>
         </message>
         <message>
-            <source>Sticker (smiley)</source>
-            <translation>ステッカー（スマイル）</translation>
-        </message>
+        <source>Custom image</source>
+        <translation>カスタム画像</translation>
+    </message>
         <message>
-            <location filename="../src/MainWindow.cpp" line="738" />
-            <source>How detected faces are obscured.
+        <source>How detected faces are obscured.
 Mosaic = pixelation (block size below).
 Gaussian blur = strong smoothing scaled to face size.
 Solid fill = opaque black box, irreversible.
-Sticker = a friendly opaque smiley. Default: Mosaic</source>
-            <translation>How detected faces are obscured.
-Mosaic = pixelation (block size below).
-Gaussian blur = strong smoothing scaled to face size.
-Solid fill = opaque black box, irreversible.
-Sticker = a friendly opaque smiley. Default: Mosaic</translation>
-        </message>
+Custom image = place your selected image over every detected region. Default: Mosaic</source>
+        <translation>検出された顔を隠す方法です。
+モザイク = ピクセル化（下のブロックサイズを使用）。
+ガウスぼかし = 顔のサイズに応じた強いぼかし。
+単色塗りつぶし = 元に戻せない不透明な黒いボックス。
+カスタム画像 = 選択した画像を検出されたすべての領域に配置。既定値: モザイク</translation>
+    </message>
         <message>
             <location filename="../src/MainWindow.cpp" line="752" />
             <source>Minimum confidence to accept a face.
@@ -651,7 +650,55 @@ Check these results before sharing them.</translation>
             <source>Not downloaded yet — click Download</source>
             <translation>未ダウンロード — 「ダウンロード」をクリック</translation>
         </message>
-    </context>
+        <message>
+        <source>Choose an existing image file.</source>
+        <translation>既存の画像ファイルを選択してください。</translation>
+    </message>
+    <message>
+        <source>The selected image must be no larger than 64 MB.</source>
+        <translation>選択する画像は64 MB以下にしてください。</translation>
+    </message>
+    <message>
+        <source>The selected file is not a supported image.</source>
+        <translation>選択したファイルはサポートされている画像ではありません。</translation>
+    </message>
+    <message>
+        <source>The selected image has invalid dimensions.</source>
+        <translation>選択した画像のサイズ情報が無効です。</translation>
+    </message>
+    <message>
+        <source>The selected image could not be decoded: %1</source>
+        <translation>選択した画像をデコードできませんでした: %1</translation>
+    </message>
+    <message>
+        <source>Choose an image to cover detected faces</source>
+        <translation>検出された顔を覆う画像を選択</translation>
+    </message>
+    <message>
+        <source>The image is resized to each detected region. Transparent pixels leave the original image visible.</source>
+        <translation>画像は検出された各領域のサイズに合わせて調整されます。透明なピクセルでは元の画像がそのまま表示されます。</translation>
+    </message>
+    <message>
+        <source>Choose custom image</source>
+        <translation>カスタム画像を選択</translation>
+    </message>
+    <message>
+        <source>Select Custom Image</source>
+        <translation>カスタム画像を選択</translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)</source>
+        <translation>画像 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)</translation>
+    </message>
+    <message>
+        <source>Invalid Custom Image</source>
+        <translation>無効なカスタム画像</translation>
+    </message>
+    <message>
+        <source>Built-in model integrity check failed: %1</source>
+        <translation>内蔵モデルの整合性チェックに失敗しました: %1</translation>
+    </message>
+</context>
     <context>
         <name>cloakframe::ProcessorWorker</name>
         <message>
@@ -846,10 +893,9 @@ Check these results before sharing them.</translation>
             <translation>スキップ: (original copied): %1</translation>
         </message>
         <message>
-            <location filename="../src/ProcessorWorker.cpp" line="537" />
-            <source>Applying mosaic</source>
-            <translation>モザイクを適用中</translation>
-        </message>
+        <source>Applying anonymization</source>
+        <translation>匿名化を適用中</translation>
+    </message>
         <message>
             <location filename="../src/ProcessorWorker.cpp" line="548" />
             <source>Failed to save: %1</source>

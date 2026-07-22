@@ -584,26 +584,84 @@ namespace
         assert(feathered != cv::Vec3b(100, 100, 100));
     }
 
-    void testStickerCoversDetectedRegion()
+    void testCustomImageCoversDetectedRegion()
     {
         cv::Mat image(96, 96, CV_8UC3, cv::Scalar(100, 100, 100));
         const cv::Rect box(32, 32, 32, 32);
+        const cv::Mat customImage(4, 4, CV_8UC4, cv::Scalar(10, 20, 240, 255));
 
         cloakframe::FaceDetections detections;
         detections.push_back({cv::Rect2f(box), 1.0F});
         cloakframe::applyAnonymization(image, detections,
-                                     cloakframe::AnonymizationMethod::Sticker,
-                                     4, 0.0F, cloakframe::MaskShape::Ellipse, true);
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Ellipse, true,
+                                     customImage);
 
         for (int y = box.y; y < box.y + box.height; ++y)
         {
             for (int x = box.x; x < box.x + box.width; ++x)
             {
-                assert(image.at<cv::Vec3b>(y, x) != cv::Vec3b(100, 100, 100));
+                assert(image.at<cv::Vec3b>(y, x) == cv::Vec3b(10, 20, 240));
             }
         }
         assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 100, 100));
-        assert(image.at<cv::Vec3b>(48, 48) != image.at<cv::Vec3b>(44, 43));
+    }
+
+    void testTransparentCustomImagePreservesOriginal()
+    {
+        cv::Mat image(32, 32, CV_8UC3, cv::Scalar(100, 120, 140));
+        const cv::Mat transparent(2, 2, CV_8UC4, cv::Scalar(250, 240, 230, 0));
+        cloakframe::FaceDetections detections = {
+            {cv::Rect2f(8.0F, 8.0F, 16.0F, 16.0F), 1.0F},
+        };
+
+        cloakframe::applyAnonymization(image, detections,
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     transparent);
+
+        for (int y = 8; y < 24; ++y)
+        {
+            for (int x = 8; x < 24; ++x)
+            {
+                assert(image.at<cv::Vec3b>(y, x) == cv::Vec3b(100, 120, 140));
+            }
+        }
+        assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 120, 140));
+    }
+
+    void testSemitransparentCustomImageBlendsWithOriginal()
+    {
+        cv::Mat image(16, 16, CV_8UC3, cv::Scalar(100, 120, 140));
+        const cv::Mat semitransparent(2, 2, CV_8UC4, cv::Scalar(200, 40, 20, 128));
+        cloakframe::FaceDetections detections = {
+            {cv::Rect2f(4.0F, 4.0F, 8.0F, 8.0F), 1.0F},
+        };
+
+        cloakframe::applyAnonymization(image, detections,
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     semitransparent);
+
+        assert(image.at<cv::Vec3b>(8, 8) == cv::Vec3b(150, 80, 80));
+        assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 120, 140));
+    }
+
+    void testCustomImageSupports16BitOutput()
+    {
+        cv::Mat image(16, 16, CV_16UC3, cv::Scalar(1000, 2000, 3000));
+        const cv::Mat customImage(2, 2, CV_8UC4, cv::Scalar(10, 20, 240, 255));
+        cloakframe::FaceDetections detections = {
+            {cv::Rect2f(4.0F, 4.0F, 8.0F, 8.0F), 1.0F},
+        };
+
+        cloakframe::applyAnonymization(image, detections,
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     customImage);
+
+        assert(image.at<cv::Vec3w>(8, 8) == cv::Vec3w(2570, 5140, 61680));
+        assert(image.at<cv::Vec3w>(0, 0) == cv::Vec3w(1000, 2000, 3000));
     }
 
     void testOrientationTransforms()
@@ -1149,7 +1207,10 @@ int main(int argc, char **argv)
     testSoftEdgesAtImageBorderStayInBounds();
     testSoftEdgesUsePaddingForAGradualTransition();
     testLargeSoftEdgeMaskUsesBoundedWorkingMemoryPath();
-    testStickerCoversDetectedRegion();
+    testCustomImageCoversDetectedRegion();
+    testTransparentCustomImagePreservesOriginal();
+    testSemitransparentCustomImageBlendsWithOriginal();
+    testCustomImageSupports16BitOutput();
     testOrientationTransforms();
     testExifOrientationFallback();
     testEncodeParams();

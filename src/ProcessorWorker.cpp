@@ -282,6 +282,7 @@ namespace cloakframe
           mosaicBlockSize_(request.mosaicBlockSize),
           paddingRatio_(request.paddingRatio),
           method_(request.method),
+          customImage_(std::move(request.customImage)),
           shape_(request.shape),
           softEdges_(request.softEdges),
           preserveMetadata_(request.preserveMetadata),
@@ -941,9 +942,9 @@ namespace cloakframe
                 return outcome;
             }
 
-            emit stageChanged(index, total, tr("Applying mosaic"), fileName);
+            emit stageChanged(index, total, tr("Applying anonymization"), fileName);
             applyAnonymization(image, finalFaces, method_, mosaicBlockSize_, paddingRatio_,
-                               shape_, softEdges_);
+                               shape_, softEdges_, customImage_);
 
             if (cancelled_.load(std::memory_order_acquire))
             {
@@ -1061,6 +1062,7 @@ namespace cloakframe
         options.mosaicBlockSize = mosaicBlockSize_;
         options.paddingRatio = paddingRatio_;
         options.method = method_;
+        options.customImage = customImage_;
         options.shape = shape_;
         options.softEdges = softEdges_;
         options.crf = videoCrf_;

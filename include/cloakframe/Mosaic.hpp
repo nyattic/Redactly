@@ -11,7 +11,7 @@ namespace cloakframe
         Mosaic,
         Blur,
         Fill,
-        Sticker,
+        CustomImage,
     };
 
     enum class MaskShape
@@ -22,7 +22,8 @@ namespace cloakframe
 
     void applyAnonymization(cv::Mat &image, const FaceDetections &detections,
                             AnonymizationMethod method, int blockSize, float paddingRatio,
-                            MaskShape shape = MaskShape::Rectangle, bool softEdges = false);
+                            MaskShape shape = MaskShape::Rectangle, bool softEdges = false,
+                            const cv::Mat &customImage = {});
 
     void applyMosaic(cv::Mat &image, const FaceDetections &detections,
                      int blockSize, float paddingRatio);

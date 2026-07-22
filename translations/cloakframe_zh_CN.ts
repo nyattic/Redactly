@@ -325,8 +325,8 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="724"/>
-        <source>Tweak detection and mosaic behavior. Defaults work for most photos.</source>
-        <translation>调整检测和马赛克效果。默认值适用于大多数照片。</translation>
+        <source>Tweak detection and anonymization behavior. Defaults work for most photos.</source>
+        <translation>调整检测和匿名化效果。默认值适用于大多数照片。</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="732"/>
@@ -344,21 +344,20 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
         <translation>纯色填充（涂黑）</translation>
     </message>
     <message>
-        <source>Sticker (smiley)</source>
-        <translation>贴纸（笑脸）</translation>
+        <source>Custom image</source>
+        <translation>自定义图像</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="738"/>
         <source>How detected faces are obscured.
 Mosaic = pixelation (block size below).
 Gaussian blur = strong smoothing scaled to face size.
 Solid fill = opaque black box, irreversible.
-Sticker = a friendly opaque smiley. Default: Mosaic</source>
-        <translation>检测到的人脸遮盖方式。
-马赛克 = 像素化（块大小见下方）。
+Custom image = place your selected image over every detected region. Default: Mosaic</source>
+        <translation>遮挡检测到的人脸的方式。
+马赛克 = 像素化（使用下方的块大小）。
 高斯模糊 = 根据人脸大小进行强模糊。
-纯色填充 = 不透明黑框，无法还原。
-贴纸 = 友好的不透明笑脸。默认：马赛克</translation>
+纯色填充 = 不可逆的不透明黑框。
+自定义图像 = 将所选图像放置在每个检测区域上。默认值：马赛克</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="752"/>
@@ -649,6 +648,54 @@ Check these results before sharing them.</source>
         <source>Not downloaded yet — click Download</source>
         <translation>尚未下载——请单击“下载”</translation>
     </message>
+    <message>
+        <source>Choose an existing image file.</source>
+        <translation>请选择现有的图像文件。</translation>
+    </message>
+    <message>
+        <source>The selected image must be no larger than 64 MB.</source>
+        <translation>所选图像不得大于 64 MB。</translation>
+    </message>
+    <message>
+        <source>The selected file is not a supported image.</source>
+        <translation>所选文件不是受支持的图像。</translation>
+    </message>
+    <message>
+        <source>The selected image has invalid dimensions.</source>
+        <translation>所选图像的尺寸信息无效。</translation>
+    </message>
+    <message>
+        <source>The selected image could not be decoded: %1</source>
+        <translation>无法解码所选图像：%1</translation>
+    </message>
+    <message>
+        <source>Choose an image to cover detected faces</source>
+        <translation>选择用于遮挡检测到的人脸的图像</translation>
+    </message>
+    <message>
+        <source>The image is resized to each detected region. Transparent pixels leave the original image visible.</source>
+        <translation>图像会调整到每个检测区域的大小。透明像素会让原始图像保持可见。</translation>
+    </message>
+    <message>
+        <source>Choose custom image</source>
+        <translation>选择自定义图像</translation>
+    </message>
+    <message>
+        <source>Select Custom Image</source>
+        <translation>选择自定义图像</translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)</source>
+        <translation>图像 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)</translation>
+    </message>
+    <message>
+        <source>Invalid Custom Image</source>
+        <translation>无效的自定义图像</translation>
+    </message>
+    <message>
+        <source>Built-in model integrity check failed: %1</source>
+        <translation>内置模型完整性检查失败：%1</translation>
+    </message>
 </context>
 <context>
     <name>cloakframe::ProcessorWorker</name>
@@ -842,9 +889,8 @@ Check these results before sharing them.</source>
         <translation>已跳过（已复制原文件）：%1</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="537"/>
-        <source>Applying mosaic</source>
-        <translation>正在应用马赛克</translation>
+        <source>Applying anonymization</source>
+        <translation>正在应用匿名化</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="548"/>

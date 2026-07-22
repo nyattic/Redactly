@@ -24,6 +24,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -68,6 +69,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <opencv2/imgproc.hpp>
+
 #include <algorithm>
 #include <cmath>
 
@@ -80,6 +83,79 @@ namespace cloakframe
         constexpr int kDefaultBlockSize = 14;
         constexpr double kDefaultPadding = 0.18;
         constexpr int kModelCatalogIndexRole = Qt::UserRole + 1;
+        constexpr qint64 kMaxCustomImageBytes = 64LL * 1024LL * 1024LL;
+        constexpr int kMaxCustomImageLongEdge = 2048;
+
+        struct CustomImageLoadResult
+        {
+            cv::Mat image;
+            QString canonicalPath;
+            QString error;
+        };
+
+        CustomImageLoadResult loadCustomImage(const QString &path)
+        {
+            const QFileInfo info(path);
+            if (!info.exists() || !info.isFile())
+            {
+                return {{}, {}, QCoreApplication::translate(
+                    "cloakframe::MainWindow", "Choose an existing image file.")};
+            }
+            QFile file(info.absoluteFilePath());
+            if (!file.open(QIODevice::ReadOnly))
+            {
+                return {{}, {}, QCoreApplication::translate(
+                    "cloakframe::MainWindow", "Choose an existing image file.")};
+            }
+            if (file.size() <= 0 || file.size() > kMaxCustomImageBytes)
+            {
+                return {{}, {}, QCoreApplication::translate(
+                    "cloakframe::MainWindow", "The selected image must be no larger than 64 MB.")};
+            }
+
+            QImageReader reader(&file);
+            reader.setAutoTransform(true);
+            if (!reader.canRead())
+            {
+                return {{}, {}, QCoreApplication::translate(
+                    "cloakframe::MainWindow", "The selected file is not a supported image.")};
+            }
+
+            const QSize sourceSize = reader.size();
+            if (!sourceSize.isValid() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
+            {
+                return {{}, {}, QCoreApplication::translate(
+                    "cloakframe::MainWindow", "The selected image has invalid dimensions.")};
+            }
+
+            QSize decodedSize = sourceSize;
+            if (std::max(decodedSize.width(), decodedSize.height()) > kMaxCustomImageLongEdge)
+            {
+                decodedSize.scale(kMaxCustomImageLongEdge, kMaxCustomImageLongEdge,
+                                  Qt::KeepAspectRatio);
+                reader.setScaledSize(decodedSize);
+            }
+
+            QImage decoded = reader.read();
+            if (decoded.isNull())
+            {
+                return {{}, {}, QCoreApplication::translate(
+                            "cloakframe::MainWindow", "The selected image could not be decoded: %1")
+                            .arg(reader.errorString())};
+            }
+            decoded = decoded.convertToFormat(QImage::Format_RGBA8888);
+            cv::Mat rgba(decoded.height(), decoded.width(), CV_8UC4, decoded.bits(),
+                         static_cast<std::size_t>(decoded.bytesPerLine()));
+            cv::Mat bgra;
+            cv::cvtColor(rgba, bgra, cv::COLOR_RGBA2BGRA);
+
+            QString canonicalPath = info.canonicalFilePath();
+            if (canonicalPath.isEmpty())
+            {
+                canonicalPath = QDir::cleanPath(info.absoluteFilePath());
+            }
+            return {std::move(bgra), std::move(canonicalPath), {}};
+        }
 
         QString releaseNotesSection(const QString &releaseNotes)
         {
@@ -156,7 +232,8 @@ namespace cloakframe
         }
 
         QPixmap anonymizationSamplePixmap(AnonymizationMethod method, MaskShape shape,
-                                          int blockSize, float padding, bool softEdges)
+                                          int blockSize, float padding, bool softEdges,
+                                          const cv::Mat &customImage)
         {
             qreal dpr = 1.0;
             for (const QScreen *screen: QGuiApplication::screens())
@@ -185,7 +262,7 @@ namespace cloakframe
             detections.push_back({cv::Rect2f(w * 0.3F, h * 0.2F, w * 0.4F, h * 0.6F), 1.0F});
             applyAnonymization(sample, detections, method,
                                std::max(2, static_cast<int>(std::lround(blockSize * dpr))),
-                               padding, shape, softEdges);
+                               padding, shape, softEdges, customImage);
 
             const QImage image(sample.data, sample.cols, sample.rows,
                                static_cast<int>(sample.step), QImage::Format_BGR888);
@@ -565,19 +642,19 @@ namespace cloakframe
             auto *advancedHint = makeSectionHint(advancedBody_);
             bodyLayout->addWidget(advancedHint);
             addRetranslation([advancedHint]
-                             { advancedHint->setText(tr("Tweak detection and mosaic behavior. Defaults work for most photos.")); });
+                             { advancedHint->setText(tr("Tweak detection and anonymization behavior. Defaults work for most photos.")); });
 
             methodCombo_ = new QComboBox(advancedBody_);
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Mosaic));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Blur));
             methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Fill));
-            methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::Sticker));
+            methodCombo_->addItem(QString(), static_cast<int>(AnonymizationMethod::CustomImage));
             addRetranslation([this]
                              {
                                  methodCombo_->setItemText(0, tr("Mosaic (pixelate)"));
                                  methodCombo_->setItemText(1, tr("Gaussian blur"));
                                  methodCombo_->setItemText(2, tr("Solid fill (blackout)"));
-                                 methodCombo_->setItemText(3, tr("Sticker (smiley)"));
+                                 methodCombo_->setItemText(3, tr("Custom image"));
                              });
             addRetranslation([this]
                              {
@@ -586,7 +663,30 @@ namespace cloakframe
                                      "Mosaic = pixelation (block size below).\n"
                                      "Gaussian blur = strong smoothing scaled to face size.\n"
                                      "Solid fill = opaque black box, irreversible.\n"
-                                     "Sticker = a friendly opaque smiley. Default: Mosaic"));
+                                     "Custom image = place your selected image over every detected region. "
+                                     "Default: Mosaic"));
+                             });
+
+            customImagePicker_ = new QWidget(advancedBody_);
+            auto *customImageLayout = new QHBoxLayout(customImagePicker_);
+            customImageLayout->setContentsMargins(0, 0, 0, 0);
+            customImageLayout->setSpacing(8);
+            customImagePathEdit_ = new QLineEdit(customImagePicker_);
+            customImagePathEdit_->setReadOnly(true);
+            customImageBrowseButton_ = new QPushButton(customImagePicker_);
+            customImageBrowseButton_->setCursor(Qt::PointingHandCursor);
+            customImageLayout->addWidget(customImagePathEdit_, 1);
+            customImageLayout->addWidget(customImageBrowseButton_);
+            addRetranslation([this]
+                             {
+                                 customImagePathEdit_->setPlaceholderText(
+                                     tr("Choose an image to cover detected faces"));
+                                 customImagePathEdit_->setToolTip(tr(
+                                     "The image is resized to each detected region. Transparent pixels "
+                                     "leave the original image visible."));
+                                 customImageBrowseButton_->setText(tr("Browse…"));
+                                 customImageBrowseButton_->setAccessibleName(
+                                     tr("Choose custom image"));
                              });
 
             shapeCombo_ = new QComboBox(advancedBody_);
@@ -675,6 +775,9 @@ namespace cloakframe
             auto *methodLabel = makeFieldLabel(advancedBody_);
             addRetranslation([methodLabel]{ methodLabel->setText(tr("Anonymization")); });
             grid->addRow(methodLabel, methodCombo_);
+            customImageLabel_ = makeFieldLabel(advancedBody_);
+            addRetranslation([this]{ customImageLabel_->setText(tr("Custom image")); });
+            grid->addRow(customImageLabel_, customImagePicker_);
             auto *shapeLabel = makeFieldLabel(advancedBody_);
             addRetranslation([shapeLabel]{ shapeLabel->setText(tr("Shape")); });
             grid->addRow(shapeLabel, shapeCombo_);
@@ -719,6 +822,8 @@ namespace cloakframe
                         updateAnonymizationControls();
                         updateAnonymizationSample();
                     });
+            connect(customImageBrowseButton_, &QPushButton::clicked,
+                    this, &MainWindow::chooseCustomImage);
             connect(shapeCombo_, &QComboBox::currentIndexChanged, this,
                     [this]{ updateAnonymizationSample(); });
             connect(softEdgeCheck_, &QCheckBox::toggled, this,
@@ -967,6 +1072,35 @@ namespace cloakframe
         }
     }
 
+    void MainWindow::chooseCustomImage()
+    {
+        if (processing_)
+        {
+            return;
+        }
+        const QString initialDirectory = customImagePathEdit_->text().isEmpty()
+                                             ? QStandardPaths::writableLocation(
+                                                   QStandardPaths::PicturesLocation)
+                                             : QFileInfo(customImagePathEdit_->text()).absolutePath();
+        const QString path = QFileDialog::getOpenFileName(
+            this, tr("Select Custom Image"), initialDirectory,
+            tr("Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)"));
+        if (path.isEmpty())
+        {
+            return;
+        }
+
+        auto loaded = loadCustomImage(path);
+        if (loaded.image.empty())
+        {
+            QMessageBox::warning(this, tr("Invalid Custom Image"), loaded.error);
+            return;
+        }
+        customImage_ = std::move(loaded.image);
+        customImagePathEdit_->setText(loaded.canonicalPath);
+        updateAnonymizationSample();
+    }
+
     void MainWindow::chooseFiles()
     {
         if (processing_)
@@ -1073,6 +1207,22 @@ namespace cloakframe
                                                    : QStringLiteral("faces");
         const bool detectFaces = detectTarget != "plates";
         const bool detectPlates = detectTarget != "faces";
+        const auto selectedMethod = static_cast<AnonymizationMethod>(
+            methodCombo_->currentData().toInt());
+        cv::Mat runCustomImage;
+        if (selectedMethod == AnonymizationMethod::CustomImage)
+        {
+            auto loaded = loadCustomImage(customImagePathEdit_->text());
+            if (loaded.image.empty())
+            {
+                reportValidationIssue(loaded.error, customImagePathEdit_);
+                return;
+            }
+            customImage_ = std::move(loaded.image);
+            customImagePathEdit_->setText(loaded.canonicalPath);
+            runCustomImage = customImage_;
+            updateAnonymizationSample();
+        }
 
         auto modelPath = selectedModelPath();
         const BuiltinModel *selectedBuiltin = selectedBuiltinModel();
@@ -1179,7 +1329,8 @@ namespace cloakframe
         request.nmsThreshold = static_cast<float>(nmsThresholdSpin_->value());
         request.mosaicBlockSize = blockSizeSpin_->value();
         request.paddingRatio = static_cast<float>(paddingSpin_->value());
-        request.method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
+        request.method = selectedMethod;
+        request.customImage = runCustomImage;
         request.shape = static_cast<MaskShape>(shapeCombo_->currentData().toInt());
         request.softEdges = softEdgeCheck_->isChecked();
         request.preserveMetadata = metadataSupportAvailable() && preserveMetaCheck_->isChecked();
@@ -1262,6 +1413,7 @@ namespace cloakframe
             request.plateModelSha256 = runState.plateKey.modelSha256;
         }
         runState.method = request.method;
+        runState.customImage = request.customImage;
         runState.shape = request.shape;
         runState.blockSize = request.mosaicBlockSize;
         runState.padding = request.paddingRatio;
@@ -1514,6 +1666,18 @@ namespace cloakframe
             methodCombo_->setCurrentIndex(savedMethod);
         }
 
+        const QString savedCustomImage = settings.value("customImagePath").toString();
+        if (!savedCustomImage.isEmpty())
+        {
+            customImagePathEdit_->setText(savedCustomImage);
+            auto loaded = loadCustomImage(savedCustomImage);
+            if (!loaded.image.empty())
+            {
+                customImage_ = std::move(loaded.image);
+                customImagePathEdit_->setText(loaded.canonicalPath);
+            }
+        }
+
         const auto savedShape = settings.value("shape", 0).toInt();
         if (shapeCombo_ != nullptr && savedShape >= 0 && savedShape < shapeCombo_->count())
         {
@@ -1578,6 +1742,8 @@ namespace cloakframe
         applyLanguage(language);
 
         updateModelPathFromSelection();
+        updateAnonymizationControls();
+        updateAnonymizationSample();
     }
 
     void MainWindow::saveSettings() const
@@ -1609,6 +1775,8 @@ namespace cloakframe
         settings.setValue("blockSize", blockSizeSpin_->value());
         settings.setValue("padding", paddingSpin_->value());
         settings.setValue("method", methodCombo_ ? methodCombo_->currentIndex() : 0);
+        settings.setValue("customImagePath",
+                          customImagePathEdit_ ? customImagePathEdit_->text() : QString());
         settings.setValue("shape", shapeCombo_ ? shapeCombo_->currentIndex() : 0);
         settings.setValue("softEdges", softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked());
         settings.setValue("detectTarget", detectCombo_ ? detectCombo_->currentIndex() : 0);
@@ -1745,7 +1913,7 @@ namespace cloakframe
             static_cast<MaskShape>(shapeCombo_->currentData().toInt()),
             blockSizeSpin_->value(),
             static_cast<float>(paddingSpin_->value()),
-            softEdgeCheck_->isChecked()));
+            softEdgeCheck_->isChecked(), customImage_));
     }
 
     void MainWindow::updateAnonymizationControls() const
@@ -1756,15 +1924,31 @@ namespace cloakframe
         }
         const auto method = static_cast<AnonymizationMethod>(
             methodCombo_->currentData().toInt());
-        const bool sticker = method == AnonymizationMethod::Sticker;
+        const bool customImage = method == AnonymizationMethod::CustomImage;
         const bool editable = !processing_;
+        if (customImageLabel_ != nullptr)
+        {
+            customImageLabel_->setVisible(customImage);
+        }
+        if (customImagePicker_ != nullptr)
+        {
+            customImagePicker_->setVisible(customImage);
+        }
+        if (customImagePathEdit_ != nullptr)
+        {
+            customImagePathEdit_->setEnabled(editable && customImage);
+        }
+        if (customImageBrowseButton_ != nullptr)
+        {
+            customImageBrowseButton_->setEnabled(editable && customImage);
+        }
         if (shapeCombo_ != nullptr)
         {
-            shapeCombo_->setEnabled(editable && !sticker);
+            shapeCombo_->setEnabled(editable && !customImage);
         }
         if (softEdgeCheck_ != nullptr)
         {
-            softEdgeCheck_->setEnabled(editable && !sticker);
+            softEdgeCheck_->setEnabled(editable && !customImage);
         }
         if (blockSizeSpin_ != nullptr)
         {
@@ -1868,6 +2052,8 @@ namespace cloakframe
         detectCombo_->setEnabled(!processing);
         modelCombo_->setEnabled(!processing);
         methodCombo_->setEnabled(!processing);
+        customImagePathEdit_->setEnabled(!processing);
+        customImageBrowseButton_->setEnabled(!processing);
         shapeCombo_->setEnabled(!processing);
         softEdgeCheck_->setEnabled(!processing);
         modelPathEdit_->setEnabled(!processing);
@@ -2112,6 +2298,7 @@ namespace cloakframe
         if (activeRunState_.has_value())
         {
             spec.method = activeRunState_->method;
+            spec.customImage = activeRunState_->customImage;
             spec.shape = activeRunState_->shape;
             spec.softEdges = activeRunState_->softEdges;
             spec.blockSize = activeRunState_->blockSize;
@@ -2121,6 +2308,7 @@ namespace cloakframe
         else
         {
             spec.method = static_cast<AnonymizationMethod>(methodCombo_->currentData().toInt());
+            spec.customImage = customImage_;
             spec.shape = static_cast<MaskShape>(shapeCombo_->currentData().toInt());
             spec.softEdges = softEdgeCheck_ != nullptr && softEdgeCheck_->isChecked();
             spec.blockSize = blockSizeSpin_->value();

@@ -109,69 +109,57 @@ namespace cloakframe
                                         region.y + region.height - detected.y - detected.height}));
         }
 
-        void fillRoundedRectangle(cv::Mat image, const cv::Rect &rect, int radius,
-                                  const cv::Scalar &color)
+        void blendWithMask(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha);
+
+        void customImageRegion(cv::Mat roi, const cv::Mat &customImage)
         {
-            radius = std::clamp(radius, 0, std::min(rect.width, rect.height) / 2);
-            if (radius == 0)
+            if (customImage.empty() || customImage.type() != CV_8UC4)
             {
-                cv::rectangle(image, rect, color, cv::FILLED, cv::LINE_AA);
                 return;
             }
 
-            cv::rectangle(image,
-                          cv::Rect(rect.x + radius, rect.y,
-                                   rect.width - 2 * radius, rect.height),
-                          color, cv::FILLED, cv::LINE_AA);
-            cv::rectangle(image,
-                          cv::Rect(rect.x, rect.y + radius,
-                                   rect.width, rect.height - 2 * radius),
-                          color, cv::FILLED, cv::LINE_AA);
-            for (const cv::Point center: {
-                     cv::Point(rect.x + radius, rect.y + radius),
-                     cv::Point(rect.x + rect.width - radius - 1, rect.y + radius),
-                     cv::Point(rect.x + radius, rect.y + rect.height - radius - 1),
-                     cv::Point(rect.x + rect.width - radius - 1,
-                               rect.y + rect.height - radius - 1)})
-            {
-                cv::circle(image, center, radius, color, cv::FILLED, cv::LINE_AA);
-            }
-        }
+            cv::Mat resized;
+            const int interpolation = customImage.cols > roi.cols || customImage.rows > roi.rows
+                                          ? cv::INTER_AREA
+                                          : cv::INTER_LINEAR;
+            cv::resize(customImage, resized, roi.size(), 0.0, 0.0, interpolation);
 
-        void stickerRegion(cv::Mat roi, int radiusLimit)
-        {
-            const int minEdge = std::min(roi.cols, roi.rows);
-            if (minEdge < 3)
+            cv::Mat alpha;
+            cv::extractChannel(resized, alpha, 3);
+            cv::Mat rendered8;
+            switch (roi.channels())
             {
-                roi.setTo(cv::Scalar(40, 190, 245, 255));
-                return;
+                case 1:
+                    cv::cvtColor(resized, rendered8, cv::COLOR_BGRA2GRAY);
+                    break;
+                case 3:
+                    cv::cvtColor(resized, rendered8, cv::COLOR_BGRA2BGR);
+                    break;
+                case 4:
+                    rendered8 = resized;
+                    break;
+                default:
+                    return;
             }
 
-            const int outline = std::max(1, minEdge / 28);
-            const int radius = std::clamp(minEdge / 5, 0, std::max(0, radiusLimit));
-            const cv::Rect outer(0, 0, roi.cols, roi.rows);
-            fillRoundedRectangle(roi, outer, radius, cv::Scalar(35, 45, 55, 255));
-
-            const cv::Rect face(outline, outline,
-                                std::max(1, roi.cols - 2 * outline),
-                                std::max(1, roi.rows - 2 * outline));
-            fillRoundedRectangle(roi, face, std::max(0, radius - outline),
-                                 cv::Scalar(45, 205, 250, 255));
-
-            const int eyeRadius = std::max(1, minEdge / 14);
-            const int eyeY = static_cast<int>(std::lround(roi.rows * 0.39));
-            const int leftEyeX = static_cast<int>(std::lround(roi.cols * 0.34));
-            const int rightEyeX = static_cast<int>(std::lround(roi.cols * 0.66));
-            const cv::Scalar ink(30, 40, 50, 255);
-            cv::circle(roi, {leftEyeX, eyeY}, eyeRadius, ink, cv::FILLED, cv::LINE_AA);
-            cv::circle(roi, {rightEyeX, eyeY}, eyeRadius, ink, cv::FILLED, cv::LINE_AA);
-
-            const cv::Point mouthCenter(roi.cols / 2,
-                                        static_cast<int>(std::lround(roi.rows * 0.56)));
-            const cv::Size mouthAxes(std::max(2, roi.cols / 5),
-                                     std::max(2, roi.rows / 7));
-            cv::ellipse(roi, mouthCenter, mouthAxes, 0.0, 18.0, 162.0, ink,
-                        std::max(1, minEdge / 22), cv::LINE_AA);
+            double scale = 1.0;
+            if (roi.depth() == CV_16U)
+            {
+                scale = 257.0;
+            }
+            else if (roi.depth() == CV_32F || roi.depth() == CV_64F)
+            {
+                scale = 1.0 / 255.0;
+            }
+            cv::Mat rendered;
+            rendered8.convertTo(rendered, roi.type(), scale);
+            if (roi.channels() == 4)
+            {
+                cv::Mat destinationAlpha;
+                cv::extractChannel(roi, destinationAlpha, 3);
+                cv::insertChannel(destinationAlpha, rendered, 3);
+            }
+            blendWithMask(roi, rendered, alpha);
         }
 
         constexpr float kInnerTransitionRatio = 0.12F;
@@ -493,8 +481,7 @@ namespace cloakframe
             case AnonymizationMethod::Fill:
                 fillRegion(roi);
                 break;
-            case AnonymizationMethod::Sticker:
-                stickerRegion(roi, std::min(roi.cols, roi.rows) / 5);
+            case AnonymizationMethod::CustomImage:
                 break;
             case AnonymizationMethod::Mosaic:
             default:
@@ -505,7 +492,7 @@ namespace cloakframe
 
     void applyAnonymization(cv::Mat &image, const FaceDetections &detections,
                             AnonymizationMethod method, int blockSize, float paddingRatio,
-                            MaskShape shape, bool softEdges)
+                            MaskShape shape, bool softEdges, const cv::Mat &customImage)
     {
         if (image.empty())
         {
@@ -525,10 +512,9 @@ namespace cloakframe
             }
             const cv::Rect roiRect = paddedRegion(detection.box, width, height, paddingRatio);
 
-            if (method == AnonymizationMethod::Sticker)
+            if (method == AnonymizationMethod::CustomImage)
             {
-                const cv::Rect detectedRect = paddedRegion(detection.box, width, height, 0.0F);
-                stickerRegion(image(roiRect), availableInsetFor(roiRect, detectedRect) * 2);
+                customImageRegion(image(roiRect), customImage);
                 continue;
             }
 

@@ -325,8 +325,8 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="724"/>
-        <source>Tweak detection and mosaic behavior. Defaults work for most photos.</source>
-        <translation>감지와 모자이크 동작을 조정합니다. 대부분의 사진은 기본값으로 충분합니다.</translation>
+        <source>Tweak detection and anonymization behavior. Defaults work for most photos.</source>
+        <translation>감지와 익명화 방식을 조정합니다. 대부분의 사진은 기본값으로 충분합니다.</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="732"/>
@@ -344,21 +344,20 @@ On: copies selected EXIF fields such as camera, timestamps, and location. Embedd
         <translation>단색 채우기(블랙아웃)</translation>
     </message>
     <message>
-        <source>Sticker (smiley)</source>
-        <translation>스티커(웃는 얼굴)</translation>
+        <source>Custom image</source>
+        <translation>커스텀 이미지</translation>
     </message>
     <message>
-        <location filename="../src/MainWindow.cpp" line="738"/>
         <source>How detected faces are obscured.
 Mosaic = pixelation (block size below).
 Gaussian blur = strong smoothing scaled to face size.
 Solid fill = opaque black box, irreversible.
-Sticker = a friendly opaque smiley. Default: Mosaic</source>
-        <translation>감지된 얼굴을 처리하는 방식입니다.
-모자이크 = 픽셀화(아래 블록 크기).
-가우시안 블러 = 얼굴 크기에 맞춘 강한 블러.
-단색 채우기 = 불투명한 검은 상자, 복원 불가.
-스티커 = 친근한 불투명 웃는 얼굴. 기본값: 모자이크</translation>
+Custom image = place your selected image over every detected region. Default: Mosaic</source>
+        <translation>감지된 얼굴을 가리는 방법입니다.
+모자이크 = 픽셀화(아래의 블록 크기 사용).
+가우시안 블러 = 얼굴 크기에 비례한 강한 흐림 효과.
+단색 채우기 = 되돌릴 수 없는 불투명한 검정 상자.
+커스텀 이미지 = 선택한 이미지를 감지된 모든 영역 위에 배치. 기본값: 모자이크</translation>
     </message>
     <message>
         <location filename="../src/MainWindow.cpp" line="752"/>
@@ -649,6 +648,54 @@ Check these results before sharing them.</source>
         <source>Not downloaded yet — click Download</source>
         <translation>아직 다운로드하지 않음 — 다운로드를 누르세요</translation>
     </message>
+    <message>
+        <source>Choose an existing image file.</source>
+        <translation>존재하는 이미지 파일을 선택하세요.</translation>
+    </message>
+    <message>
+        <source>The selected image must be no larger than 64 MB.</source>
+        <translation>선택한 이미지는 64MB 이하여야 합니다.</translation>
+    </message>
+    <message>
+        <source>The selected file is not a supported image.</source>
+        <translation>선택한 파일은 지원되는 이미지가 아닙니다.</translation>
+    </message>
+    <message>
+        <source>The selected image has invalid dimensions.</source>
+        <translation>선택한 이미지의 크기 정보가 올바르지 않습니다.</translation>
+    </message>
+    <message>
+        <source>The selected image could not be decoded: %1</source>
+        <translation>선택한 이미지를 디코딩할 수 없습니다: %1</translation>
+    </message>
+    <message>
+        <source>Choose an image to cover detected faces</source>
+        <translation>감지된 얼굴을 가릴 이미지 선택</translation>
+    </message>
+    <message>
+        <source>The image is resized to each detected region. Transparent pixels leave the original image visible.</source>
+        <translation>이미지는 감지된 각 영역의 크기에 맞춰 조정됩니다. 투명한 픽셀에서는 원본 이미지가 그대로 보입니다.</translation>
+    </message>
+    <message>
+        <source>Choose custom image</source>
+        <translation>커스텀 이미지 선택</translation>
+    </message>
+    <message>
+        <source>Select Custom Image</source>
+        <translation>커스텀 이미지 선택</translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)</source>
+        <translation>이미지 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)</translation>
+    </message>
+    <message>
+        <source>Invalid Custom Image</source>
+        <translation>잘못된 커스텀 이미지</translation>
+    </message>
+    <message>
+        <source>Built-in model integrity check failed: %1</source>
+        <translation>내장 모델 무결성 검사 실패: %1</translation>
+    </message>
 </context>
 <context>
     <name>cloakframe::ProcessorWorker</name>
@@ -842,9 +889,8 @@ Check these results before sharing them.</source>
         <translation>건너뜀(원본 복사됨): %1</translation>
     </message>
     <message>
-        <location filename="../src/ProcessorWorker.cpp" line="537"/>
-        <source>Applying mosaic</source>
-        <translation>모자이크 적용 중</translation>
+        <source>Applying anonymization</source>
+        <translation>익명화 적용 중</translation>
     </message>
     <message>
         <location filename="../src/ProcessorWorker.cpp" line="548"/>

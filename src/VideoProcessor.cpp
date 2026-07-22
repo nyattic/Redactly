@@ -787,7 +787,7 @@ namespace cloakframe
                         applyAnonymization(batch[static_cast<std::size_t>(slot)], toRedact,
                                            options.method, options.mosaicBlockSize,
                                            options.paddingRatio, options.shape,
-                                           options.softEdges);
+                                           options.softEdges, options.customImage);
                     }
                     catch (...)
                     {

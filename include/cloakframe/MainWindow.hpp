@@ -72,6 +72,8 @@ namespace cloakframe
     private slots:
         void chooseModel();
 
+        void chooseCustomImage();
+
         void downloadSelectedModel();
 
         void chooseFiles();
@@ -159,6 +161,7 @@ namespace cloakframe
             DetectorCacheKey faceKey;
             DetectorCacheKey plateKey;
             AnonymizationMethod method = AnonymizationMethod::Mosaic;
+            cv::Mat customImage;
             MaskShape shape = MaskShape::Rectangle;
             int blockSize = 14;
             float padding = 0.18F;
@@ -174,6 +177,10 @@ namespace cloakframe
         QComboBox *modelCombo_ = nullptr;
         QComboBox *detectCombo_ = nullptr;
         QComboBox *methodCombo_ = nullptr;
+        QLabel *customImageLabel_ = nullptr;
+        QWidget *customImagePicker_ = nullptr;
+        QLineEdit *customImagePathEdit_ = nullptr;
+        QPushButton *customImageBrowseButton_ = nullptr;
         QComboBox *shapeCombo_ = nullptr;
         QCheckBox *softEdgeCheck_ = nullptr;
         QToolButton *settingsButton_ = nullptr;
@@ -217,6 +224,7 @@ namespace cloakframe
         std::shared_ptr<PlateDetector> cachedPlateDetector_;
         DetectorCacheKey cachedPlateDetectorKey_;
         std::optional<ActiveRunState> activeRunState_;
+        cv::Mat customImage_;
 
         QTranslator translator_;
         QTranslator qtTranslator_;

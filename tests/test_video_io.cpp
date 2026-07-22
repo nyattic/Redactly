@@ -477,7 +477,8 @@ int main(int argc, char **argv)
     {
         cloakframe::VideoProcessOptions options;
         options.analysisLongEdge = 160;
-        options.method = cloakframe::AnonymizationMethod::Fill;
+        options.method = cloakframe::AnonymizationMethod::CustomImage;
+        options.customImage = cv::Mat(4, 4, CV_8UC4, cv::Scalar(10, 20, 240, 255));
         options.paddingRatio = 0.0F;
         const QString scaledPath = tempDir.filePath("scaled.mp4");
         std::atomic<bool> cancelled{false};
@@ -512,9 +513,11 @@ int main(int argc, char **argv)
         assert(outputReader.readFrame(outputFrame));
         const cv::Scalar inside = cv::mean(outputFrame(cv::Rect(85, 65, 150, 110)));
         const cv::Scalar outside = cv::mean(outputFrame(cv::Rect(0, 190, 70, 45)));
-        assert(inside[0] + inside[1] + inside[2] < 30.0);
+        assert(inside[2] > 150.0);
+        assert(inside[2] > inside[0] * 4.0);
+        assert(inside[2] > inside[1] * 4.0);
         assert(outside[0] + outside[1] + outside[2] > 45.0);
-        std::puts("analysis-to-native coordinate scaling: ok");
+        std::puts("custom-image video masking and analysis-to-native coordinate scaling: ok");
     }
 
     {
