@@ -664,6 +664,91 @@ namespace
         assert(image.at<cv::Vec3w>(0, 0) == cv::Vec3w(1000, 2000, 3000));
     }
 
+    void testCustomImagePreservesAspectRatio()
+    {
+        cv::Mat image(40, 40, CV_8UC3, cv::Scalar(100, 100, 100));
+        cv::Mat wideImage(20, 40, CV_8UC4, cv::Scalar(10, 20, 240, 255));
+        wideImage(cv::Rect(10, 0, 20, 20)).setTo(cv::Scalar(10, 200, 20, 255));
+        const cloakframe::FaceDetections detections = {
+            {cv::Rect2f(8.0F, 8.0F, 24.0F, 24.0F), 1.0F},
+        };
+
+        cloakframe::applyAnonymization(image, detections,
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     wideImage);
+
+        assert(image.at<cv::Vec3b>(20, 20) == cv::Vec3b(10, 200, 20));
+        assert(image.at<cv::Vec3b>(9, 12) == cv::Vec3b(10, 200, 20));
+        assert(image.at<cv::Vec3b>(30, 28) == cv::Vec3b(10, 200, 20));
+        assert(image.at<cv::Vec3b>(0, 0) == cv::Vec3b(100, 100, 100));
+    }
+
+    void testCustomImageFollowsFaceRollWithoutDarkAlphaFringes()
+    {
+        const cv::Vec3b background(60, 70, 80);
+        cv::Mat upright(64, 64, CV_8UC3, background);
+        cv::Mat tilted = upright.clone();
+        cv::Mat customImage(8, 16, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        customImage(cv::Rect(2, 1, 12, 6)).setTo(cv::Scalar(10, 40, 240, 255));
+
+        cloakframe::FaceDetection uprightFace{cv::Rect2f(16.0F, 16.0F, 32.0F, 32.0F),
+                                               1.0F};
+        cloakframe::FaceDetection tiltedFace = uprightFace;
+        tiltedFace.rollRadians = 0.45F;
+        tiltedFace.hasPose = true;
+
+        cloakframe::applyAnonymization(upright, {uprightFace},
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     customImage);
+        cloakframe::applyAnonymization(tilted, {tiltedFace},
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     customImage);
+
+        assert(cv::norm(upright, tilted, cv::NORM_L1) > 1000.0);
+        bool foundBlendedEdge = false;
+        for (int y = 16; y < 48; ++y)
+        {
+            for (int x = 16; x < 48; ++x)
+            {
+                const auto pixel = tilted.at<cv::Vec3b>(y, x);
+                if (pixel != background)
+                {
+                    foundBlendedEdge = true;
+                    assert(pixel[2] >= background[2]);
+                }
+            }
+        }
+        assert(foundBlendedEdge);
+        assert(tilted.at<cv::Vec3b>(0, 0) == background);
+    }
+
+    void testOpaqueRotatedCustomImageStillCoversDetectedRegion()
+    {
+        const cv::Vec3b background(60, 70, 80);
+        cv::Mat image(64, 64, CV_8UC3, background);
+        const cv::Mat opaque(8, 12, CV_8UC4, cv::Scalar(10, 40, 240, 255));
+        cloakframe::FaceDetection face{cv::Rect2f(16.0F, 16.0F, 32.0F, 32.0F), 1.0F};
+        face.rollRadians = -0.6F;
+        face.hasPose = true;
+
+        cloakframe::applyAnonymization(image, {face},
+                                     cloakframe::AnonymizationMethod::CustomImage,
+                                     4, 0.0F, cloakframe::MaskShape::Rectangle, false,
+                                     opaque);
+
+        for (int y = 16; y < 48; ++y)
+        {
+            for (int x = 16; x < 48; ++x)
+            {
+                assert(image.at<cv::Vec3b>(y, x) == cv::Vec3b(10, 40, 240));
+            }
+        }
+        assert(image.at<cv::Vec3b>(0, 0) == background);
+    }
+
     void testOrientationTransforms()
     {
         cv::Mat base(2, 3, CV_8UC1);
@@ -1211,6 +1296,9 @@ int main(int argc, char **argv)
     testTransparentCustomImagePreservesOriginal();
     testSemitransparentCustomImageBlendsWithOriginal();
     testCustomImageSupports16BitOutput();
+    testCustomImagePreservesAspectRatio();
+    testCustomImageFollowsFaceRollWithoutDarkAlphaFringes();
+    testOpaqueRotatedCustomImageStillCoversDetectedRegion();
     testOrientationTransforms();
     testExifOrientationFallback();
     testEncodeParams();

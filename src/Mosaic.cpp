@@ -111,32 +111,145 @@ namespace cloakframe
 
         void blendWithMask(cv::Mat roi, const cv::Mat &anonymized, const cv::Mat &alpha);
 
-        void customImageRegion(cv::Mat roi, const cv::Mat &customImage)
+        cv::Mat transformedCustomImage(const cv::Mat &customImage,
+                                       const cv::Size &targetSize,
+                                       const float rollRadians,
+                                       const bool hasPose)
         {
-            if (customImage.empty() || customImage.type() != CV_8UC4)
+            if (customImage.empty() || customImage.type() != CV_8UC4 ||
+                targetSize.width < 1 || targetSize.height < 1)
+            {
+                return {};
+            }
+
+            cv::Mat premultiplied = customImage.clone();
+            cv::parallel_for_(cv::Range(0, premultiplied.rows), [&](const cv::Range &range)
+            {
+                for (int y = range.start; y < range.end; ++y)
+                {
+                    auto *row = premultiplied.ptr<cv::Vec4b>(y);
+                    for (int x = 0; x < premultiplied.cols; ++x)
+                    {
+                        const int alpha = row[x][3];
+                        for (int channel = 0; channel < 3; ++channel)
+                        {
+                            row[x][channel] = static_cast<unsigned char>(
+                                (static_cast<int>(row[x][channel]) * alpha + 127) / 255);
+                        }
+                    }
+                }
+            });
+
+            const bool rotate = isValidFacePose(rollRadians, hasPose) &&
+                                std::abs(rollRadians) > 0.001F;
+            const double cosine = rotate ? std::abs(std::cos(rollRadians)) : 1.0;
+            const double sine = rotate ? std::abs(std::sin(rollRadians)) : 0.0;
+            const int overscan = rotate ? 2 : 0;
+            const cv::Size canvasSize(
+                std::max(targetSize.width,
+                         static_cast<int>(std::ceil(cosine * targetSize.width +
+                                                    sine * targetSize.height)) + overscan),
+                std::max(targetSize.height,
+                         static_cast<int>(std::ceil(sine * targetSize.width +
+                                                    cosine * targetSize.height)) + overscan));
+
+            cv::Rect sourceRegion(0, 0, premultiplied.cols, premultiplied.rows);
+            const double sourceAspect = static_cast<double>(premultiplied.cols) /
+                                        premultiplied.rows;
+            const double canvasAspect = static_cast<double>(canvasSize.width) /
+                                        canvasSize.height;
+            if (sourceAspect > canvasAspect)
+            {
+                sourceRegion.width = std::clamp(
+                    static_cast<int>(std::lround(premultiplied.rows * canvasAspect)),
+                    1, premultiplied.cols);
+                sourceRegion.x = (premultiplied.cols - sourceRegion.width) / 2;
+            }
+            else if (sourceAspect < canvasAspect)
+            {
+                sourceRegion.height = std::clamp(
+                    static_cast<int>(std::lround(premultiplied.cols / canvasAspect)),
+                    1, premultiplied.rows);
+                sourceRegion.y = (premultiplied.rows - sourceRegion.height) / 2;
+            }
+
+            cv::Mat canvas;
+            const int interpolation = sourceRegion.width > canvasSize.width ||
+                                      sourceRegion.height > canvasSize.height
+                                          ? cv::INTER_AREA
+                                          : cv::INTER_LINEAR;
+            cv::resize(premultiplied(sourceRegion), canvas, canvasSize,
+                       0.0, 0.0, interpolation);
+
+            cv::Mat rendered8;
+            if (rotate)
+            {
+                constexpr double kRadiansToDegrees = 57.2957795131;
+                const cv::Point2f sourceCenter(static_cast<float>(canvasSize.width - 1) * 0.5F,
+                                               static_cast<float>(canvasSize.height - 1) * 0.5F);
+                const cv::Point2f targetCenter(static_cast<float>(targetSize.width - 1) * 0.5F,
+                                               static_cast<float>(targetSize.height - 1) * 0.5F);
+                cv::Mat rotation = cv::getRotationMatrix2D(
+                    sourceCenter, -static_cast<double>(rollRadians) * kRadiansToDegrees, 1.0);
+                rotation.at<double>(0, 2) += targetCenter.x - sourceCenter.x;
+                rotation.at<double>(1, 2) += targetCenter.y - sourceCenter.y;
+                cv::warpAffine(canvas, rendered8, rotation, targetSize,
+                               cv::INTER_LINEAR, cv::BORDER_CONSTANT,
+                               cv::Scalar(0, 0, 0, 0));
+            }
+            else
+            {
+                rendered8 = std::move(canvas);
+            }
+
+            cv::parallel_for_(cv::Range(0, rendered8.rows), [&](const cv::Range &range)
+            {
+                for (int y = range.start; y < range.end; ++y)
+                {
+                    auto *row = rendered8.ptr<cv::Vec4b>(y);
+                    for (int x = 0; x < rendered8.cols; ++x)
+                    {
+                        const int alpha = row[x][3];
+                        if (alpha == 0)
+                        {
+                            row[x][0] = row[x][1] = row[x][2] = 0;
+                            continue;
+                        }
+                        for (int channel = 0; channel < 3; ++channel)
+                        {
+                            row[x][channel] = cv::saturate_cast<unsigned char>(
+                                (static_cast<int>(row[x][channel]) * 255 + alpha / 2) /
+                                alpha);
+                        }
+                    }
+                }
+            });
+            return rendered8;
+        }
+
+        void customImageRegion(cv::Mat roi, const cv::Mat &customImage,
+                               const float rollRadians, const bool hasPose)
+        {
+            cv::Mat transformed = transformedCustomImage(customImage, roi.size(),
+                                                         rollRadians, hasPose);
+            if (transformed.empty())
             {
                 return;
             }
 
-            cv::Mat resized;
-            const int interpolation = customImage.cols > roi.cols || customImage.rows > roi.rows
-                                          ? cv::INTER_AREA
-                                          : cv::INTER_LINEAR;
-            cv::resize(customImage, resized, roi.size(), 0.0, 0.0, interpolation);
-
             cv::Mat alpha;
-            cv::extractChannel(resized, alpha, 3);
+            cv::extractChannel(transformed, alpha, 3);
             cv::Mat rendered8;
             switch (roi.channels())
             {
                 case 1:
-                    cv::cvtColor(resized, rendered8, cv::COLOR_BGRA2GRAY);
+                    cv::cvtColor(transformed, rendered8, cv::COLOR_BGRA2GRAY);
                     break;
                 case 3:
-                    cv::cvtColor(resized, rendered8, cv::COLOR_BGRA2BGR);
+                    cv::cvtColor(transformed, rendered8, cv::COLOR_BGRA2BGR);
                     break;
                 case 4:
-                    rendered8 = resized;
+                    rendered8 = transformed;
                     break;
                 default:
                     return;
@@ -514,7 +627,8 @@ namespace cloakframe
 
             if (method == AnonymizationMethod::CustomImage)
             {
-                customImageRegion(image(roiRect), customImage);
+                customImageRegion(image(roiRect), customImage,
+                                  detection.rollRadians, detection.hasPose);
                 continue;
             }
 

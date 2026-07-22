@@ -673,8 +673,8 @@ Check these results before sharing them.</source>
         <translation>选择用于遮挡检测到的人脸的图像</translation>
     </message>
     <message>
-        <source>The image is resized to each detected region. Transparent pixels leave the original image visible.</source>
-        <translation>图像会调整到每个检测区域的大小。透明像素会让原始图像保持可见。</translation>
+        <source>The image keeps its aspect ratio and follows detected face tilt when available. Transparent pixels leave the original image visible.</source>
+        <translation>图像会保持宽高比，并在可用时跟随检测到的人脸倾斜。透明像素会让原始图像保持可见。</translation>
     </message>
     <message>
         <source>Choose custom image</source>

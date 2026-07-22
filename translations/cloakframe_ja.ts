@@ -675,8 +675,8 @@ Check these results before sharing them.</translation>
         <translation>検出された顔を覆う画像を選択</translation>
     </message>
     <message>
-        <source>The image is resized to each detected region. Transparent pixels leave the original image visible.</source>
-        <translation>画像は検出された各領域のサイズに合わせて調整されます。透明なピクセルでは元の画像がそのまま表示されます。</translation>
+        <source>The image keeps its aspect ratio and follows detected face tilt when available. Transparent pixels leave the original image visible.</source>
+        <translation>画像は縦横比を維持し、可能な場合は検出された顔の傾きに追従します。透明なピクセルでは元の画像がそのまま表示されます。</translation>
     </message>
     <message>
         <source>Choose custom image</source>

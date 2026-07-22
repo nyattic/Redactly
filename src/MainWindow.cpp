@@ -682,8 +682,8 @@ namespace cloakframe
                                  customImagePathEdit_->setPlaceholderText(
                                      tr("Choose an image to cover detected faces"));
                                  customImagePathEdit_->setToolTip(tr(
-                                     "The image is resized to each detected region. Transparent pixels "
-                                     "leave the original image visible."));
+                                     "The image keeps its aspect ratio and follows detected face tilt "
+                                     "when available. Transparent pixels leave the original image visible."));
                                  customImageBrowseButton_->setText(tr("Browse…"));
                                  customImageBrowseButton_->setAccessibleName(
                                      tr("Choose custom image"));

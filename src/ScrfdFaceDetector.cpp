@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -25,6 +26,8 @@ namespace cloakframe
         constexpr std::array<int, 3> kStrides = {8, 16, 32};
         constexpr int kChannels = 3;
         constexpr int kMaxAnchorsPerLocation = 2;
+        constexpr int kFaceLandmarkCount = 5;
+        constexpr int kLandmarkCoordinateCount = kFaceLandmarkCount * 2;
         constexpr size_t kMaxCandidatesBeforeNms = 2000;
         constexpr int kMaxInputSize = 2048;
         constexpr std::uintmax_t kMaxModelFileBytes = 512ULL << 20;
@@ -65,6 +68,56 @@ namespace cloakframe
             const float right = distances[2];
             const float bottom = distances[3];
             return {center.x - left, center.y - top, left + right, top + bottom};
+        }
+
+        std::optional<float> faceRollFromLandmarks(
+            const std::array<cv::Point2f, kFaceLandmarkCount> &landmarks,
+            const cv::Rect2f &box)
+        {
+            if (box.width <= 0.0F || box.height <= 0.0F)
+            {
+                return std::nullopt;
+            }
+            const float marginX = box.width * 0.35F;
+            const float marginY = box.height * 0.35F;
+            for (const auto &point: landmarks)
+            {
+                if (!std::isfinite(point.x) || !std::isfinite(point.y) ||
+                    point.x < box.x - marginX || point.x > box.x + box.width + marginX ||
+                    point.y < box.y - marginY || point.y > box.y + box.height + marginY)
+                {
+                    return std::nullopt;
+                }
+            }
+
+            const auto angleFor = [&](const int left, const int right)
+                -> std::optional<float>
+            {
+                const float dx = landmarks[right].x - landmarks[left].x;
+                const float dy = landmarks[right].y - landmarks[left].y;
+                const float distance = std::hypot(dx, dy);
+                if (dx <= 0.0F || distance < box.width * 0.08F ||
+                    distance > box.width * 1.25F)
+                {
+                    return std::nullopt;
+                }
+                const float angle = std::atan2(dy, dx);
+                return isValidFacePose(angle, true) ? std::optional<float>(angle)
+                                                    : std::nullopt;
+            };
+
+            const auto eyeAngle = angleFor(0, 1);
+            if (!eyeAngle)
+            {
+                return std::nullopt;
+            }
+            const auto mouthAngle = angleFor(3, 4);
+            if (!mouthAngle || std::abs(*mouthAngle - *eyeAngle) > 0.45F)
+            {
+                return eyeAngle;
+            }
+            return std::atan2(std::sin(*eyeAngle) + std::sin(*mouthAngle),
+                              std::cos(*eyeAngle) + std::cos(*mouthAngle));
         }
     }
 
@@ -352,6 +405,7 @@ namespace cloakframe
 
         std::vector<StrideOutput> scoreOutputs;
         std::vector<StrideOutput> bboxOutputs;
+        std::vector<StrideOutput> keypointOutputs;
         for (const auto &output: outputs)
         {
             if (!output.IsTensor())
@@ -382,6 +436,10 @@ namespace cloakframe
             else if (lastDim == 4)
             {
                 bboxOutputs.push_back({&output, elementCount});
+            }
+            else if (lastDim == kLandmarkCoordinateCount)
+            {
+                keypointOutputs.push_back({&output, elementCount});
             }
         }
 
@@ -424,6 +482,20 @@ namespace cloakframe
                 }
             }
 
+            const StrideOutput *keypointMatch = nullptr;
+            if (scoreMatch != nullptr)
+            {
+                for (const auto &candidate: keypointOutputs)
+                {
+                    if (candidate.elementCount ==
+                        scoreMatch->elementCount * kLandmarkCoordinateCount)
+                    {
+                        keypointMatch = &candidate;
+                        break;
+                    }
+                }
+            }
+
             if (scoreMatch == nullptr || bboxMatch == nullptr)
             {
                 throw std::runtime_error(
@@ -453,6 +525,9 @@ namespace cloakframe
 
             const auto *scores = scoreMatch->value->GetTensorData<float>();
             const auto *boxes = bboxMatch->value->GetTensorData<float>();
+            const auto *keypoints = keypointMatch != nullptr
+                                        ? keypointMatch->value->GetTensorData<float>()
+                                        : nullptr;
             if (scores == nullptr || boxes == nullptr)
             {
                 continue;
@@ -495,7 +570,27 @@ namespace cloakframe
                 y = std::clamp(y, 0.0F, static_cast<float>(prepared.originalHeight - 1));
                 const float right = std::clamp(x + width, x + 1.0F, static_cast<float>(prepared.originalWidth));
                 const float bottom = std::clamp(y + height, y + 1.0F, static_cast<float>(prepared.originalHeight));
-                detections.push_back({cv::Rect2f(x, y, right - x, bottom - y), score});
+                FaceDetection detection{cv::Rect2f(x, y, right - x, bottom - y), score};
+                if (keypoints != nullptr)
+                {
+                    std::array<cv::Point2f, kFaceLandmarkCount> landmarks;
+                    for (int landmark = 0; landmark < kFaceLandmarkCount; ++landmark)
+                    {
+                        const int offset = i * kLandmarkCoordinateCount + landmark * 2;
+                        landmarks[landmark] = {
+                            (anchors[i].x + keypoints[offset] * static_cast<float>(stride)) /
+                                prepared.scale,
+                            (anchors[i].y + keypoints[offset + 1] * static_cast<float>(stride)) /
+                                prepared.scale,
+                        };
+                    }
+                    if (const auto roll = faceRollFromLandmarks(landmarks, detection.box))
+                    {
+                        detection.rollRadians = *roll;
+                        detection.hasPose = true;
+                    }
+                }
+                detections.push_back(detection);
             }
         }
 

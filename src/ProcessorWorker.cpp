@@ -2,6 +2,7 @@
 
 #include "cloakframe/ImageIo.hpp"
 #include "cloakframe/ImageScanner.hpp"
+#include "cloakframe/DetectionGeometry.hpp"
 #include "cloakframe/MemoryBudget.hpp"
 #include "cloakframe/OrderedParallel.hpp"
 #include "cloakframe/OutputPlan.hpp"
@@ -230,7 +231,8 @@ namespace cloakframe
             return scaled;
         }
 
-        FaceDetections toDetections(const QVector<QRectF> &boxes)
+        FaceDetections toDetections(const QVector<QRectF> &boxes,
+                                    const FaceDetections &references = {})
         {
             FaceDetections result;
             result.reserve(boxes.size());
@@ -242,6 +244,24 @@ namespace cloakframe
                                      static_cast<float>(rect.width()),
                                      static_cast<float>(rect.height()));
                 det.score = 1.0F;
+                const FaceDetection *bestReference = nullptr;
+                float bestIou = 0.0F;
+                for (const auto &reference: references)
+                {
+                    const float iou = intersectionOverUnion(det.box, reference.box);
+                    if (iou > bestIou)
+                    {
+                        bestIou = iou;
+                        bestReference = &reference;
+                    }
+                }
+                constexpr float kPoseTransferIou = 0.6F;
+                if (bestReference != nullptr && bestIou >= kPoseTransferIou &&
+                    hasValidFacePose(*bestReference))
+                {
+                    det.rollRadians = bestReference->rollRadians;
+                    det.hasPose = true;
+                }
                 result.push_back(det);
             }
             return result;
@@ -874,7 +894,8 @@ namespace cloakframe
 
                             finalFaces = toDetections(
                                 scaleRects(reviewResult.finalBoxes,
-                                           previewScale != 0.0 ? 1.0 / previewScale : 1.0));
+                                           previewScale != 0.0 ? 1.0 / previewScale : 1.0),
+                                detected);
                             break;
                     }
                 }

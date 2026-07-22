@@ -28,6 +28,8 @@ namespace cloakframe
         cv::Rect2f box;
         float score = 0.0F;
         bool interpolated = false;
+        float rollRadians = 0.0F;
+        bool hasPose = false;
     };
 
     struct Track

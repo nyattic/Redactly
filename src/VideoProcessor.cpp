@@ -665,8 +665,12 @@ namespace cloakframe
                     {
                         throw std::length_error("Invalid video tracking data.");
                     }
+                    FaceDetection detection{tracked.box, 1.0F};
+                    detection.rollRadians = tracked.rollRadians;
+                    detection.hasPose = isValidFacePose(tracked.rollRadians,
+                                                        tracked.hasPose);
                     frameDetections[static_cast<std::size_t>(tracked.frame)].push_back(
-                        {tracked.box, 1.0F});
+                        detection);
                     ++indexedRegions;
                 }
                 std::vector<TrackedBox>().swap(track.boxes);

@@ -81,6 +81,12 @@ namespace cloakframe
                     a.height + (b.height - a.height) * t};
         }
 
+        float lerpAngle(const float from, const float to, const float t)
+        {
+            constexpr float kTwoPi = 6.2831853072F;
+            return from + std::remainder(to - from, kTwoPi) * t;
+        }
+
         bool gapMotionTooFast(const cv::Rect2f &a, const cv::Rect2f &b, int gap)
         {
             constexpr float kMaxShiftPerFrame = 0.75F;
@@ -234,7 +240,9 @@ namespace cloakframe
             active.velocity = active.velocity * (1.0F - config_.velocityBlend)
                               + observed * config_.velocityBlend;
         }
-        active.track.boxes.push_back({frame, detection.box, detection.score, false});
+        active.track.boxes.push_back({frame, detection.box, detection.score, false,
+                                      detection.rollRadians,
+                                      hasValidFacePose(detection)});
         ++boxCount_;
         active.lastFrame = frame;
         if (detection.score >= config_.highScoreThreshold)
@@ -338,7 +346,9 @@ namespace cloakframe
             ActiveTrack fresh;
             fresh.track.id = nextId_++;
             fresh.track.boxes.push_back({frame, detections[detectionIndex].box,
-                                         detections[detectionIndex].score, false});
+                                         detections[detectionIndex].score, false,
+                                         detections[detectionIndex].rollRadians,
+                                         hasValidFacePose(detections[detectionIndex])});
             fresh.lastFrame = frame;
             fresh.lastHighScoreFrame = frame;
             active_.push_back(std::move(fresh));
@@ -528,10 +538,18 @@ namespace cloakframe
             for (int step = 1; step <= gap; ++step)
             {
                 const float t = static_cast<float>(step) / static_cast<float>(gap + 1);
-                append({current.frame + step,
-                        lerpBox(current.box, next.box, t),
-                        std::min(current.score, next.score),
-                        true});
+                TrackedBox interpolated{current.frame + step,
+                                        lerpBox(current.box, next.box, t),
+                                        std::min(current.score, next.score),
+                                        true};
+                if (isValidFacePose(current.rollRadians, current.hasPose) &&
+                    isValidFacePose(next.rollRadians, next.hasPose))
+                {
+                    interpolated.rollRadians = lerpAngle(current.rollRadians,
+                                                         next.rollRadians, t);
+                    interpolated.hasPose = isValidFacePose(interpolated.rollRadians, true);
+                }
+                append(interpolated);
             }
         }
         append(track.boxes.back());
@@ -556,6 +574,9 @@ namespace cloakframe
 
             cv::Rect2f accumulated{0.0F, 0.0F, 0.0F, 0.0F};
             int count = 0;
+            float rollSin = 0.0F;
+            float rollCos = 0.0F;
+            int rollCount = 0;
             for (size_t j = begin; j <= end; ++j)
             {
                 const int frameDelta = original[j].frame - original[i].frame;
@@ -569,10 +590,25 @@ namespace cloakframe
                 accumulated.width += original[j].box.width;
                 accumulated.height += original[j].box.height;
                 ++count;
+                if (isValidFacePose(original[j].rollRadians, original[j].hasPose))
+                {
+                    rollSin += std::sin(original[j].rollRadians);
+                    rollCos += std::cos(original[j].rollRadians);
+                    ++rollCount;
+                }
             }
             if (count < 2)
             {
                 continue;
+            }
+            if (rollCount >= 2)
+            {
+                const float smoothedRoll = std::atan2(rollSin, rollCos);
+                if (isValidFacePose(smoothedRoll, true))
+                {
+                    track.boxes[i].rollRadians = smoothedRoll;
+                    track.boxes[i].hasPose = true;
+                }
             }
             const float inverse = 1.0F / static_cast<float>(count);
             const cv::Rect2f smoothed{accumulated.x * inverse, accumulated.y * inverse,
@@ -618,7 +654,8 @@ namespace cloakframe
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
-            prefix.push_back({frame, first.box, first.score, true});
+            prefix.push_back({frame, first.box, first.score, true,
+                              first.rollRadians, first.hasPose});
         }
 
         std::vector<TrackedBox> suffix;
@@ -635,7 +672,8 @@ namespace cloakframe
             {
                 throw std::length_error("Tracking data exceeds the safety limit.");
             }
-            suffix.push_back({frame, last.box, last.score, true});
+            suffix.push_back({frame, last.box, last.score, true,
+                              last.rollRadians, last.hasPose});
         }
 
         track.boxes.insert(track.boxes.begin(), prefix.begin(), prefix.end());

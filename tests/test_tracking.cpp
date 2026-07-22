@@ -16,6 +16,15 @@ namespace
         return {cv::Rect2f(x, y, size, size), score};
     }
 
+    cloakframe::FaceDetection posedDet(float x, float y, float rollRadians,
+                                       float score = 0.9F, float size = 40.0F)
+    {
+        auto detection = det(x, y, score, size);
+        detection.rollRadians = rollRadians;
+        detection.hasPose = true;
+        return detection;
+    }
+
     std::vector<cloakframe::FaceDetections> movingObjectSequence(int frames, float startX, float stepX,
                                                                float y = 100.0F, float score = 0.9F)
     {
@@ -82,6 +91,41 @@ namespace
         assert(tracks.size() == 1);
         cloakframe::interpolateGaps(tracks[0], 3);
         assert(tracks[0].boxAtFrame(8) == nullptr);
+    }
+
+    void testPoseIsTrackedAndInterpolated()
+    {
+        std::vector<cloakframe::FaceDetections> sequence(3);
+        sequence[0].push_back(posedDet(50.0F, 100.0F, 0.0F));
+        sequence[2].push_back(posedDet(60.0F, 100.0F, 0.4F));
+
+        auto tracks = cloakframe::buildTracks(sequence);
+        assert(tracks.size() == 1);
+        assert(tracks[0].boxAtFrame(0)->hasPose);
+        assert(std::abs(tracks[0].boxAtFrame(0)->rollRadians) < 0.001F);
+
+        cloakframe::interpolateGaps(tracks[0], 3);
+        const auto *middle = tracks[0].boxAtFrame(1);
+        assert(middle != nullptr);
+        assert(middle->interpolated);
+        assert(middle->hasPose);
+        assert(std::abs(middle->rollRadians - 0.2F) < 0.001F);
+    }
+
+    void testPoseSmoothingReducesAngleJitter()
+    {
+        cloakframe::Track track;
+        const float angles[] = {0.2F, 0.2F, -0.6F, 0.2F, 0.2F};
+        for (int frame = 0; frame < 5; ++frame)
+        {
+            track.boxes.push_back({frame,
+                                   cv::Rect2f(50.0F, 100.0F, 40.0F, 40.0F),
+                                   0.9F, false, angles[frame], true});
+        }
+
+        cloakframe::smoothTrack(track, 2);
+        assert(track.boxes[2].hasPose);
+        assert(std::abs(track.boxes[2].rollRadians) < 0.1F);
     }
 
     void testLowConfidenceDetectionsExtendButNeverStartTracks()
@@ -597,6 +641,8 @@ int main()
     testConstantVelocitySingleTrack();
     testGapInterpolationFillsMissedFrames();
     testGapLargerThanLimitIsNotInterpolated();
+    testPoseIsTrackedAndInterpolated();
+    testPoseSmoothingReducesAngleJitter();
     testLowConfidenceDetectionsExtendButNeverStartTracks();
     testLowConfidenceCoastingExpires();
     testTracksWithFewStrongDetectionsAreDropped();

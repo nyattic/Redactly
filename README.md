@@ -33,7 +33,7 @@ The first time you use a built-in model, CloakFrame downloads it once (3–17 MB
 4. Choose an output folder
 5. Click **Start**
 
-Faces and plates can be hidden with pixelation, Gaussian blur, solid fill, or a custom image you select. Custom images are resized over each detected region and processed locally. Their transparency is preserved, so transparent pixels leave the original image visible.
+Faces and plates can be hidden with pixelation, Gaussian blur, solid fill, or a custom image you select. Custom images keep their aspect ratio and are processed locally. Face overlays follow the head tilt reported by landmark-capable SCRFD models; video overlays also smooth and interpolate that angle between detections. Their transparency is preserved, so transparent pixels leave the original image visible.
 
 Originals are never modified. Enable **Review before saving** to inspect image detections, add missed regions, or review video tracks on a timeline before encoding. False video tracks can be excluded from the entire output with one click.
 

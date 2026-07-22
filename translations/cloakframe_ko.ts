@@ -673,8 +673,8 @@ Check these results before sharing them.</source>
         <translation>감지된 얼굴을 가릴 이미지 선택</translation>
     </message>
     <message>
-        <source>The image is resized to each detected region. Transparent pixels leave the original image visible.</source>
-        <translation>이미지는 감지된 각 영역의 크기에 맞춰 조정됩니다. 투명한 픽셀에서는 원본 이미지가 그대로 보입니다.</translation>
+        <source>The image keeps its aspect ratio and follows detected face tilt when available. Transparent pixels leave the original image visible.</source>
+        <translation>이미지는 원본 비율을 유지하며, 가능한 경우 감지된 얼굴 기울기를 따라갑니다. 투명한 픽셀에서는 원본 이미지가 그대로 보입니다.</translation>
     </message>
     <message>
         <source>Choose custom image</source>
