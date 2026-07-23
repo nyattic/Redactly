@@ -6,10 +6,14 @@ distributed under its own license, reproduced in full in this file. These
 notices apply to the accompanying binary distribution of CloakFrame and are
 separate from CloakFrame's own license (GNU General Public License v3.0 or later).
 
-The SCRFD face-detection models are NOT bundled with CloakFrame; the application
-downloads them on first use from their source. They originate from InsightFace
-and are available for non-commercial research use only. See the README for
-details.
+The YOLO5Face-n and YuNet face-detection models are NOT bundled with CloakFrame;
+the application downloads them on first use from their sources. YOLO5Face-n is
+downloaded from the yolov5-face-onnx-inference project, is based on the
+GPL-3.0-licensed YOLO5Face project, and was trained on the WIDER FACE dataset,
+whose use is restricted to non-commercial research. YuNet is downloaded from
+OpenCV Zoo, whose model directory identifies it as MIT-licensed. Custom SCRFD
+models remain supported and retain the terms imposed by their own sources. See
+the README for source links and details.
 
 ================================================================================
 FFmpeg  (GPL-2.0-or-later builds; the FFmpeg core is LGPL-2.1-or-later)

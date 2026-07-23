@@ -12,6 +12,8 @@
 #include "cloakframe/Mosaic.hpp"
 #include "cloakframe/ReviewTypes.hpp"
 #include "cloakframe/ScrfdFaceDetector.hpp"
+#include "cloakframe/Yolo5FaceDetector.hpp"
+#include "cloakframe/YuNetFaceDetector.hpp"
 #include "cloakframe/VideoIo.hpp"
 #include "cloakframe/VideoProcessor.hpp"
 #include "cloakframe/VideoReviewTypes.hpp"
@@ -49,6 +51,27 @@ namespace cloakframe
         constexpr int kVideoDetectionInputSize = 960;
 
         constexpr int kReviewMaxLongEdge = 1600;
+
+        std::shared_ptr<Detector> makeFaceDetector(const FaceModelKind kind,
+                                                   const QString &modelPath,
+                                                   const int scrfdInputSize,
+                                                   const bool enableAcceleration,
+                                                   const QByteArray &expectedSha256)
+        {
+            const auto path = pathToUtf8(pathFromQString(modelPath));
+            switch (kind)
+            {
+            case FaceModelKind::Yolo5Face:
+                return std::make_shared<Yolo5FaceDetector>(
+                    path, enableAcceleration, expectedSha256);
+            case FaceModelKind::YuNet:
+                return std::make_shared<YuNetFaceDetector>(path, expectedSha256);
+            case FaceModelKind::Scrfd:
+                return std::make_shared<ScrfdFaceDetector>(
+                    path, scrfdInputSize, enableAcceleration, expectedSha256);
+            }
+            throw std::invalid_argument("Unsupported face model kind.");
+        }
 
         std::uint64_t imageMemoryBudget()
         {
@@ -294,6 +317,7 @@ namespace cloakframe
     ProcessorWorker::ProcessorWorker(ProcessingRequest request, DetectorCache cache)
         : modelPath_(std::move(request.modelPath)),
           modelSha256_(std::move(request.modelSha256)),
+          faceModelKind_(request.faceModelKind),
           inputs_(std::move(request.inputs)),
           outputDirectory_(std::move(request.outputDirectory)),
           recursive_(request.recursive),
@@ -324,7 +348,7 @@ namespace cloakframe
 
     ProcessorWorker::~ProcessorWorker() = default;
 
-    std::shared_ptr<ScrfdFaceDetector> ProcessorWorker::takeDetector()
+    std::shared_ptr<Detector> ProcessorWorker::takeDetector()
     {
         return std::move(detector_);
     }
@@ -334,7 +358,7 @@ namespace cloakframe
         return std::move(plateDetector_);
     }
 
-    std::shared_ptr<ScrfdFaceDetector> ProcessorWorker::takeVideoDetector()
+    std::shared_ptr<Detector> ProcessorWorker::takeVideoDetector()
     {
         return std::move(videoDetector_);
     }
@@ -352,20 +376,20 @@ namespace cloakframe
                     emit logMessage(tr("Loading face detection model..."));
                     try
                     {
-                        detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString(),
-                                                                        640, gpuAcceleration_,
-                                                                        modelSha256_);
-                        const cv::Mat warmupFrame(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+                        detector_ = makeFaceDetector(faceModelKind_, modelPath_, 640,
+                                                     gpuAcceleration_, modelSha256_);
+                        const cv::Mat warmupFrame(detector_->inputSize(), detector_->inputSize(),
+                                                  CV_8UC3, cv::Scalar(0, 0, 0));
                         detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                     catch (const Ort::Exception &)
                     {
                         emit logMessage(tr("GPU acceleration can't run the face model; "
                                            "using the CPU instead."));
-                        detector_ = std::make_shared<ScrfdFaceDetector>(modelPath_.toStdString(),
-                                                                        640, false,
-                                                                        modelSha256_);
-                        const cv::Mat warmupFrame(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+                        detector_ = makeFaceDetector(faceModelKind_, modelPath_, 640, false,
+                                                     modelSha256_);
+                        const cv::Mat warmupFrame(detector_->inputSize(), detector_->inputSize(),
+                                                  CV_8UC3, cv::Scalar(0, 0, 0));
                         detector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
                     }
                 } else
@@ -373,7 +397,7 @@ namespace cloakframe
                     emit logMessage(tr("Reusing loaded face detection model."));
                 }
                 emit logMessage(tr("Face detection backend: %1")
-                                    .arg(QString::fromLatin1(ortAcceleratorName(detector_->accelerator()))));
+                                    .arg(QString::fromLatin1(detector_->backendName())));
             }
 
             if (detectPlates_)
@@ -1095,12 +1119,15 @@ namespace cloakframe
         if (detectFaces_ && detector_ && !videoDetector_)
         {
             emit logMessage(tr("Loading face detection model for video..."));
+            const int videoInputSize = faceModelKind_ == FaceModelKind::Scrfd
+                                           ? kVideoDetectionInputSize
+                                           : 640;
             try
             {
-                videoDetector_ = std::make_shared<ScrfdFaceDetector>(
-                    modelPath_.toStdString(), kVideoDetectionInputSize, gpuAcceleration_,
-                    modelSha256_);
-                const cv::Mat warmupFrame(kVideoDetectionInputSize, kVideoDetectionInputSize,
+                videoDetector_ = makeFaceDetector(faceModelKind_, modelPath_,
+                                                  videoInputSize, gpuAcceleration_,
+                                                  modelSha256_);
+                const cv::Mat warmupFrame(videoDetector_->inputSize(), videoDetector_->inputSize(),
                                           CV_8UC3, cv::Scalar(0, 0, 0));
                 videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
             }
@@ -1108,18 +1135,17 @@ namespace cloakframe
             {
                 emit logMessage(tr("GPU acceleration can't run the video face model at %1 px; "
                                    "using the CPU instead.")
-                                    .arg(kVideoDetectionInputSize));
-                videoDetector_ = std::make_shared<ScrfdFaceDetector>(
-                    modelPath_.toStdString(), kVideoDetectionInputSize, false,
-                    modelSha256_);
-                const cv::Mat warmupFrame(kVideoDetectionInputSize, kVideoDetectionInputSize,
+                                    .arg(videoInputSize));
+                videoDetector_ = makeFaceDetector(faceModelKind_, modelPath_,
+                                                  videoInputSize, false,
+                                                  modelSha256_);
+                const cv::Mat warmupFrame(videoDetector_->inputSize(), videoDetector_->inputSize(),
                                           CV_8UC3, cv::Scalar(0, 0, 0));
                 videoDetector_->detect(warmupFrame, scoreThreshold_, nmsThreshold_);
             }
             emit logMessage(tr("Video face detection: %1 px · %2")
                                 .arg(videoDetector_->inputSize())
-                                .arg(QString::fromLatin1(
-                                    ortAcceleratorName(videoDetector_->accelerator()))));
+                                .arg(QString::fromLatin1(videoDetector_->backendName())));
         }
 
         const float detectionThreshold =

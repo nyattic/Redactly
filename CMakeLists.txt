@@ -22,7 +22,7 @@ include(FindOnnxRuntimeLocal)
 
 find_package(Qt6 6.8.1 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Qt6 6.8.1 QUIET OPTIONAL_COMPONENTS LinguistTools Svg)
-find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
+find_package(OpenCV REQUIRED COMPONENTS core dnn imgcodecs imgproc objdetect)
 if(OpenCV_VERSION VERSION_LESS 4.10.0)
     message(FATAL_ERROR "CloakFrame requires OpenCV 4.10.0 or newer")
 endif()

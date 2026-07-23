@@ -54,13 +54,18 @@ namespace cloakframe
     {
         static const std::array<BuiltinModel, 2> models = {
             BuiltinModel{
-                "Fast  ·  SCRFD 2.5G", "2.5g_bnkps.onnx",
-                "https://huggingface.co/RuteNL/SCRFD-face-detection-ONNX/resolve/main/2.5g_bnkps.onnx",
-                "3f1ac54e769cb5fd76eda11ac3c088eed78d1f51a935a839d04d49b0e770219e", 3291737},
+                "Accurate  ·  YOLO5Face-n", "yolov5n_face.onnx",
+                "https://github.com/yakhyo/yolov5-face-onnx-inference/releases/download/weights/"
+                "yolov5n_face.onnx",
+                "eb244a06e36999db732b317c2b30fa113cd6cfc1a397eaf738f2d6f33c01f640",
+                11021477, FaceModelKind::Yolo5Face},
             BuiltinModel{
-                "Accurate  ·  SCRFD 10G", "10g_bnkps.onnx",
-                "https://huggingface.co/RuteNL/SCRFD-face-detection-ONNX/resolve/main/10g_bnkps.onnx",
-                "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91", 16923827},
+                "Fast  ·  YuNet", "face_detection_yunet_2023mar.onnx",
+                "https://github.com/opencv/opencv_zoo/raw/"
+                "47534e27c9851bb1128ccc0102f1145e27f23f98/models/"
+                "face_detection_yunet/face_detection_yunet_2023mar.onnx",
+                "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+                232589, FaceModelKind::YuNet},
         };
         return models;
     }

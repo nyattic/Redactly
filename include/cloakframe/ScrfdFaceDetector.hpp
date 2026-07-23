@@ -27,7 +27,12 @@ namespace cloakframe
 
         [[nodiscard]] OrtAccelerator accelerator() const noexcept { return accelerator_; }
 
-        [[nodiscard]] int inputSize() const noexcept { return inputSize_; }
+        [[nodiscard]] int inputSize() const noexcept override { return inputSize_; }
+
+        [[nodiscard]] const char *backendName() const noexcept override
+        {
+            return ortAcceleratorName(accelerator_);
+        }
 
     private:
         struct PreparedImage

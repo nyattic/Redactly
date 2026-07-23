@@ -35,8 +35,8 @@ class QWidget;
 namespace cloakframe
 {
     struct BuiltinModel;
+    class Detector;
     class ProcessorWorker;
-    class ScrfdFaceDetector;
     class PlateDetector;
 
     class MainWindow final : public QMainWindow
@@ -140,6 +140,7 @@ namespace cloakframe
             qint64 modelLastModifiedMs = -1;
             QByteArray modelSha256;
             bool gpuAcceleration = false;
+            FaceModelKind faceModelKind = FaceModelKind::Scrfd;
 
             [[nodiscard]] bool isValid() const
             {
@@ -152,7 +153,8 @@ namespace cloakframe
                        modelSize == other.modelSize &&
                        modelLastModifiedMs == other.modelLastModifiedMs &&
                        modelSha256 == other.modelSha256 &&
-                       gpuAcceleration == other.gpuAcceleration;
+                       gpuAcceleration == other.gpuAcceleration &&
+                       faceModelKind == other.faceModelKind;
             }
         };
 
@@ -172,7 +174,8 @@ namespace cloakframe
         };
 
         [[nodiscard]] static DetectorCacheKey makeDetectorCacheKey(
-            const QString &modelPath, bool gpuAcceleration);
+            const QString &modelPath, bool gpuAcceleration,
+            FaceModelKind faceModelKind = FaceModelKind::Scrfd);
 
         QComboBox *modelCombo_ = nullptr;
         QComboBox *detectCombo_ = nullptr;
@@ -217,8 +220,8 @@ namespace cloakframe
         ProcessorWorker *worker_ = nullptr;
         QElapsedTimer runTimer_;
 
-        std::shared_ptr<ScrfdFaceDetector> cachedDetector_;
-        std::shared_ptr<ScrfdFaceDetector> cachedVideoDetector_;
+        std::shared_ptr<Detector> cachedDetector_;
+        std::shared_ptr<Detector> cachedVideoDetector_;
         DetectorCacheKey cachedDetectorKey_;
         DetectorCacheKey cachedVideoDetectorKey_;
         std::shared_ptr<PlateDetector> cachedPlateDetector_;

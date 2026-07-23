@@ -29,6 +29,8 @@ add_library(cloakframe_core STATIC
     VideoIo.cpp
     VideoProcessor.cpp
     VideoReviewTypes.cpp
+    Yolo5FaceDetector.cpp
+    YuNetFaceDetector.cpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/DetectionGeometry.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/Detector.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/FaceDetection.hpp
@@ -52,6 +54,8 @@ add_library(cloakframe_core STATIC
     ${PROJECT_SOURCE_DIR}/include/cloakframe/VideoIo.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/VideoProcessor.hpp
     ${PROJECT_SOURCE_DIR}/include/cloakframe/VideoReviewTypes.hpp
+    ${PROJECT_SOURCE_DIR}/include/cloakframe/Yolo5FaceDetector.hpp
+    ${PROJECT_SOURCE_DIR}/include/cloakframe/YuNetFaceDetector.hpp
 )
 
 target_include_directories(cloakframe_core PUBLIC ${PROJECT_SOURCE_DIR}/include)

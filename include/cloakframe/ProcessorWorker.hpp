@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cloakframe/ImageScanner.hpp"
+#include "cloakframe/ModelCatalog.hpp"
 #include "cloakframe/Mosaic.hpp"
 #include "cloakframe/VideoIo.hpp"
 
@@ -19,13 +20,14 @@
 
 namespace cloakframe
 {
-    class ScrfdFaceDetector;
+    class Detector;
     class PlateDetector;
 
     struct ProcessingRequest
     {
         QString modelPath;
         QByteArray modelSha256;
+        FaceModelKind faceModelKind = FaceModelKind::Scrfd;
         QStringList inputs;
         QString outputDirectory;
         QString plateModelPath;
@@ -51,9 +53,9 @@ namespace cloakframe
 
     struct DetectorCache
     {
-        std::shared_ptr<ScrfdFaceDetector> face;
+        std::shared_ptr<Detector> face;
         std::shared_ptr<PlateDetector> plate;
-        std::shared_ptr<ScrfdFaceDetector> videoFace;
+        std::shared_ptr<Detector> videoFace;
     };
 
     enum class RunOutcome
@@ -83,11 +85,11 @@ namespace cloakframe
 
         ~ProcessorWorker() override;
 
-        [[nodiscard]] std::shared_ptr<ScrfdFaceDetector> takeDetector();
+        [[nodiscard]] std::shared_ptr<Detector> takeDetector();
 
         [[nodiscard]] std::shared_ptr<PlateDetector> takePlateDetector();
 
-        [[nodiscard]] std::shared_ptr<ScrfdFaceDetector> takeVideoDetector();
+        [[nodiscard]] std::shared_ptr<Detector> takeVideoDetector();
 
     public slots:
         void process();
@@ -122,6 +124,7 @@ namespace cloakframe
 
         QString modelPath_;
         QByteArray modelSha256_;
+        FaceModelKind faceModelKind_;
         QStringList inputs_;
         QString outputDirectory_;
         bool recursive_;
@@ -148,9 +151,9 @@ namespace cloakframe
         std::condition_variable imageMemoryCv_;
         std::uint64_t imageMemoryAvailable_ = 0;
         std::mutex detectMutex_;
-        std::shared_ptr<ScrfdFaceDetector> detector_;
+        std::shared_ptr<Detector> detector_;
         std::shared_ptr<PlateDetector> plateDetector_;
-        std::shared_ptr<ScrfdFaceDetector> videoDetector_;
+        std::shared_ptr<Detector> videoDetector_;
     };
 }
 

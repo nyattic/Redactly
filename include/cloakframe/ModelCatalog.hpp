@@ -9,6 +9,13 @@ namespace cloakframe
 {
     inline constexpr qint64 kMaxCustomModelBytes = 512LL * 1024LL * 1024LL;
 
+    enum class FaceModelKind
+    {
+        Scrfd,
+        Yolo5Face,
+        YuNet,
+    };
+
     struct BuiltinModel
     {
         QString label;
@@ -16,6 +23,7 @@ namespace cloakframe
         QString url;
         QString sha256;
         qint64 approxBytes;
+        FaceModelKind faceKind = FaceModelKind::Scrfd;
     };
 
     const std::array<BuiltinModel, 2> &builtinModels();

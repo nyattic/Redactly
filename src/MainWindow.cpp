@@ -9,7 +9,7 @@
 #include "cloakframe/PlateDetector.hpp"
 #include "cloakframe/ProcessorWorker.hpp"
 #include "cloakframe/ReviewDialog.hpp"
-#include "cloakframe/ScrfdFaceDetector.hpp"
+#include "cloakframe/Detector.hpp"
 #include "cloakframe/SettingsDialog.hpp"
 #include "cloakframe/Theme.hpp"
 #include "cloakframe/UpdateChecker.hpp"
@@ -462,7 +462,7 @@ namespace cloakframe
             pathRow->setSpacing(8);
             modelPathEdit_ = new QLineEdit(card);
             modelPathEdit_->setReadOnly(true);
-            addRetranslation([this]{ modelPathEdit_->setPlaceholderText(tr("Bundled SCRFD model path")); });
+            addRetranslation([this]{ modelPathEdit_->setPlaceholderText(tr("Face model path")); });
             downloadButton_ = new QPushButton(card);
             downloadButton_->setObjectName("primaryButton");
             addRetranslation([this]{ downloadButton_->setText(tr("Download")); });
@@ -1149,7 +1149,7 @@ namespace cloakframe
     }
 
     MainWindow::DetectorCacheKey MainWindow::makeDetectorCacheKey(
-        const QString &modelPath, bool gpuAcceleration)
+        const QString &modelPath, bool gpuAcceleration, const FaceModelKind faceModelKind)
     {
         if (modelPath.isEmpty())
         {
@@ -1166,6 +1166,7 @@ namespace cloakframe
         DetectorCacheKey key;
         key.canonicalModelPath = canonicalPath;
         key.gpuAcceleration = gpuAcceleration;
+        key.faceModelKind = faceModelKind;
         if (info.exists() && info.isFile() && info.size() > 0 &&
             info.size() <= kMaxCustomModelBytes)
         {
@@ -1234,7 +1235,7 @@ namespace cloakframe
         {
             if (modelPath.isEmpty())
             {
-                reportValidationIssue(tr("Choose a SCRFD ONNX model first."), modelCombo_);
+                reportValidationIssue(tr("Choose a face ONNX model first."), modelCombo_);
                 return;
             }
 
@@ -1243,7 +1244,7 @@ namespace cloakframe
                 const BuiltinModel *builtin = isCustom ? nullptr : selectedBuiltin;
                 if (builtin == nullptr)
                 {
-                    appendLog(tr("Choose a valid SCRFD ONNX model first."));
+                    appendLog(tr("Choose a valid face ONNX model first."));
                     return;
                 }
                 appendLog(tr("Downloading %1…").arg(builtin->fileName));
@@ -1322,6 +1323,9 @@ namespace cloakframe
 
         ProcessingRequest request;
         request.modelPath = modelPath;
+        request.faceModelKind = selectedBuiltin != nullptr
+                                    ? selectedBuiltin->faceKind
+                                    : FaceModelKind::Scrfd;
         request.inputs = inputPaths();
         request.outputDirectory = outputDirEdit_->text();
         request.plateModelPath = plateModelPath;
@@ -1345,7 +1349,8 @@ namespace cloakframe
 
         ActiveRunState runState;
         runState.faceKey = detectFaces
-                               ? makeDetectorCacheKey(modelPath, request.gpuAcceleration)
+                               ? makeDetectorCacheKey(modelPath, request.gpuAcceleration,
+                                                      request.faceModelKind)
                                : DetectorCacheKey{};
         runState.plateKey = detectPlates
                                 ? makeDetectorCacheKey(plateModelPath, request.gpuAcceleration)
@@ -1373,7 +1378,9 @@ namespace cloakframe
             }
 
             path = recoveryPath;
-            key = makeDetectorCacheKey(path, request.gpuAcceleration);
+            key = makeDetectorCacheKey(path, request.gpuAcceleration,
+                                       plate ? FaceModelKind::Scrfd
+                                             : request.faceModelKind);
             if (!key.isValid() || !modelDigestMatches(model, key.modelSha256))
             {
                 appendLog(tr("Built-in model integrity check failed: %1").arg(model.fileName));
@@ -1396,7 +1403,7 @@ namespace cloakframe
         if ((detectFaces && !runState.faceKey.isValid()) ||
             (detectPlates && !runState.plateKey.isValid()))
         {
-            reportValidationIssue(tr("Choose a valid SCRFD ONNX model first."), modelCombo_);
+            reportValidationIssue(tr("Choose a valid face ONNX model first."), modelCombo_);
             return;
         }
         if (detectFaces)
@@ -1632,7 +1639,23 @@ namespace cloakframe
         settings.endGroup();
 
         settings.beginGroup("processing");
-        const auto savedModelIndex = settings.value("modelIndex", 0).toInt();
+        int savedModelIndex = 0;
+        const QString savedModelFileName = settings.value("faceModelFileName").toString();
+        if (!savedModelFileName.isEmpty())
+        {
+            for (std::size_t index = 0; index < builtinModels().size(); ++index)
+            {
+                if (builtinModels()[index].fileName == savedModelFileName)
+                {
+                    savedModelIndex = static_cast<int>(index);
+                    break;
+                }
+            }
+        }
+        else if (settings.contains("modelIndex"))
+        {
+            savedModelIndex = settings.value("modelIndex").toInt() == 0 ? 1 : 0;
+        }
         if (modelCombo_ != nullptr && savedModelIndex >= 0 && savedModelIndex < modelCombo_->count())
         {
             modelCombo_->setCurrentIndex(savedModelIndex);
@@ -1760,7 +1783,16 @@ namespace cloakframe
         settings.setValue("modelIndex", modelCombo_ ? modelCombo_->currentIndex() : 0);
 
         const auto currentModel = selectedModelPath();
-        if (!currentModel.isEmpty() && selectedBuiltinModel() == nullptr)
+        const BuiltinModel *builtin = selectedBuiltinModel();
+        if (builtin != nullptr)
+        {
+            settings.setValue("faceModelFileName", builtin->fileName);
+        }
+        else
+        {
+            settings.remove("faceModelFileName");
+        }
+        if (!currentModel.isEmpty() && builtin == nullptr)
         {
             settings.setValue("customModelPath", currentModel);
         } else
@@ -2121,8 +2153,8 @@ namespace cloakframe
                          {
                              if (modelCombo_->count() >= 2)
                              {
-                                 modelCombo_->setItemText(0, tr("Fast  ·  SCRFD 2.5G"));
-                                 modelCombo_->setItemText(1, tr("Accurate  ·  SCRFD 10G"));
+                                 modelCombo_->setItemText(0, tr("Accurate  ·  YOLO5Face-n"));
+                                 modelCombo_->setItemText(1, tr("Fast  ·  YuNet"));
                              }
                          });
 

@@ -11,6 +11,8 @@
 #include "cloakframe/ProcessorWorker.hpp"
 #include "cloakframe/ReviewTypes.hpp"
 #include "cloakframe/ScrfdFaceDetector.hpp"
+#include "cloakframe/Yolo5FaceDetector.hpp"
+#include "cloakframe/YuNetFaceDetector.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -100,6 +102,8 @@ namespace
 
     void testBuiltinModelDigests()
     {
+        assert(cloakframe::builtinModels()[0].faceKind == cloakframe::FaceModelKind::Yolo5Face);
+        assert(cloakframe::builtinModels()[1].faceKind == cloakframe::FaceModelKind::YuNet);
         for (const auto &model: cloakframe::builtinModels())
         {
             const QByteArray digest = QByteArray::fromHex(model.sha256.toLatin1());
@@ -1222,6 +1226,29 @@ namespace
         }
         assert(faceRejected);
 
+        bool yoloRejected = false;
+        try
+        {
+            cloakframe::Yolo5FaceDetector detector(modelPath.toStdString(), false,
+                                                   unexpectedHash);
+        }
+        catch (const std::runtime_error &error)
+        {
+            yoloRejected = std::string(error.what()).find("changed") != std::string::npos;
+        }
+        assert(yoloRejected);
+
+        bool yuNetRejected = false;
+        try
+        {
+            cloakframe::YuNetFaceDetector detector(modelPath.toStdString(), unexpectedHash);
+        }
+        catch (const std::runtime_error &error)
+        {
+            yuNetRejected = std::string(error.what()).find("changed") != std::string::npos;
+        }
+        assert(yuNetRejected);
+
         bool plateRejected = false;
         try
         {
@@ -1279,6 +1306,55 @@ namespace
         const cv::Mat blank(180, 320, CV_8UC3, cv::Scalar(30, 30, 30));
         assert(patchedSize.detect(blank, 0.5F, 0.4F).empty());
     }
+
+    void testRecommendedFaceModels()
+    {
+        const QString yoloPath = qEnvironmentVariable("CLOAKFRAME_TEST_YOLO5FACE_MODEL");
+        const QString yuNetPath = qEnvironmentVariable("CLOAKFRAME_TEST_YUNET_MODEL");
+        const QString faceImagePath = qEnvironmentVariable("CLOAKFRAME_TEST_FACE_IMAGE");
+        const cv::Mat blank(360, 640, CV_8UC3, cv::Scalar(30, 30, 30));
+        const cv::Mat faceImage = faceImagePath.isEmpty()
+                                      ? cv::Mat{}
+                                      : cv::imread(faceImagePath.toStdString());
+
+        if (yoloPath.isEmpty())
+        {
+            std::puts("skipping YOLO5Face-n model test: environment path not set");
+        }
+        else
+        {
+            const auto &model = cloakframe::builtinModels()[0];
+            cloakframe::Yolo5FaceDetector detector(
+                yoloPath.toStdString(), false, QByteArray::fromHex(model.sha256.toLatin1()));
+            assert(detector.inputSize() == 640);
+            assert(detector.detect(blank, 0.99F, 0.4F).empty());
+            if (!faceImage.empty())
+            {
+                const auto detections = detector.detect(faceImage, 0.25F, 0.4F);
+                assert(!detections.empty());
+                assert(std::ranges::any_of(detections, &cloakframe::FaceDetection::hasPose));
+            }
+        }
+
+        if (yuNetPath.isEmpty())
+        {
+            std::puts("skipping YuNet model test: environment path not set");
+        }
+        else
+        {
+            const auto &model = cloakframe::builtinModels()[1];
+            cloakframe::YuNetFaceDetector detector(
+                yuNetPath.toStdString(), QByteArray::fromHex(model.sha256.toLatin1()));
+            assert(detector.inputSize() == 640);
+            assert(detector.detect(blank, 0.99F, 0.4F).empty());
+            if (!faceImage.empty())
+            {
+                const auto detections = detector.detect(faceImage, 0.25F, 0.4F);
+                assert(!detections.empty());
+                assert(std::ranges::any_of(detections, &cloakframe::FaceDetection::hasPose));
+            }
+        }
+    }
 }
 
 int main(int argc, char **argv)
@@ -1321,6 +1397,7 @@ int main(int argc, char **argv)
     testOnnxPatchRejectsInvalidBytes();
     testFixedScrfdModelRunsAtRequestedSize();
     testDynamicScrfdModelRunsAtRequestedSize();
+    testRecommendedFaceModels();
     testDestinationPathSafety();
 #ifndef _WIN32
     testDestinationRejectsSymlinkEscape();

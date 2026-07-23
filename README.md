@@ -23,17 +23,17 @@ Download from [Releases](https://github.com/nyattic/CloakFrame/releases/latest):
 - **Windows** (x64, Windows 10+) — unzip, run `CloakFrame.exe`. GPU acceleration needs Windows 10 1903+ and a DirectX 12 capable GPU (NVIDIA, AMD, or Intel); without one, detection runs on the CPU.
 - **Linux** (x86_64) — download the `.AppImage`, `chmod +x` it, and run it
 
-The first time you use a built-in model, CloakFrame downloads it once (3–17 MB) and caches it; after that it runs offline. The face models come from Hugging Face; the license plate model comes from the open-image-models project on GitHub.
+The first time you use a built-in model, CloakFrame downloads it once (0.23–11 MB) and caches it; after that it runs offline. The face models come from the YOLO5Face and OpenCV Zoo projects on GitHub; the license plate model comes from the open-image-models project on GitHub.
 
 ## Use
 
 1. Drop images, videos, or folders onto the window
 2. Choose what to detect — **Faces**, **License plates**, or **both**
-3. For faces, pick a model — **Fast** or **Accurate**
+3. For faces, pick **Accurate · YOLO5Face-n** (recommended) or **Fast · YuNet**
 4. Choose an output folder
 5. Click **Start**
 
-Faces and plates can be hidden with pixelation, Gaussian blur, solid fill, or a custom image you select. Custom images keep their aspect ratio and are processed locally. Face overlays follow the head tilt reported by landmark-capable SCRFD models; video overlays also smooth and interpolate that angle between detections. Their transparency is preserved, with a safety mosaic underneath so transparent pixels never reveal the original detected region.
+Faces and plates can be hidden with pixelation, Gaussian blur, solid fill, or a custom image you select. Custom images keep their aspect ratio and are processed locally. Face overlays follow the head tilt reported by landmark-capable face models; video overlays also smooth and interpolate that angle between detections. Their transparency is preserved, with a safety mosaic underneath so transparent pixels never reveal the original detected region.
 
 Originals are never modified. Enable **Review before saving** to inspect image detections, add missed regions, or review video tracks on a timeline before encoding. False video tracks can be excluded from the entire output with one click. Missed video regions can be drawn as manual tracks, bounded to the relevant time range, and followed with interpolated keyframes as they move.
 
@@ -43,18 +43,18 @@ When every item is processed and redacted successfully, the run finishes as **Do
 
 Supported inputs: `.jpg` `.jpeg` `.png` `.bmp` `.tif` `.tiff` `.webp` images, and `.mp4` `.mov` `.m4v` videos (H.264/HEVC, 8-bit SDR). Video support is currently in **beta** — check the output before sharing it. On Linux the video pipeline is covered by automated tests but has not been manually tested yet.
 
-Detection runs on the GPU where available — CoreML on macOS, DirectML on Windows (bundled with the release and accelerating NVIDIA, AMD, and Intel GPUs alike), CUDA on NVIDIA Linux systems, and MIGraphX on supported AMD Linux systems — with automatic CPU fallback and a Settings toggle (on by default). Linux GPU detection requires a source build linked against a GPU-enabled ONNX Runtime; the current AppImage uses CPU inference.
+YOLO5Face-n detection runs on the GPU where available — CoreML on macOS, DirectML on Windows (bundled with the release and accelerating NVIDIA, AMD, and Intel GPUs alike), CUDA on NVIDIA Linux systems, and MIGraphX on supported AMD Linux systems — with automatic CPU fallback and a Settings toggle (on by default). YuNet uses OpenCV's CPU backend. Linux GPU detection requires a source build linked against a GPU-enabled ONNX Runtime; the current AppImage uses CPU inference.
 
 Videos are processed in two passes — detection with bidirectional tracking, then encoding — so faces stay covered through motion blur and brief occlusions. When review is enabled, CloakFrame pauses between the passes to show a track timeline. Encoding uses the GPU's hardware encoder when one works — NVENC or Quick Sync on Windows and Linux, VideoToolbox on macOS — falling back to CPU x264/x265 otherwise or when GPU acceleration is off in Settings. Output is an H.264 (default) or HEVC MP4, selectable in Settings, with the original audio (re-encoded to AAC only when the source codec doesn't fit MP4), container metadata removed, and rotation baked into the pixels. Variable frame rate input is converted to a constant frame rate; 10-bit/HDR input is rejected rather than silently degraded. Video processing uses an FFmpeg bundled next to the app when present, otherwise an FFmpeg found on `PATH`. The video quality preset lives in Settings.
 
 ## Build from source
 
-Requires CMake 3.24+, a C++20 compiler, Qt 6.8.1+ available to CMake (with the Linguist tools for UI translations; Qt Svg is optional and gives a crisp settings icon, falling back to a glyph without it), OpenCV 4.10.0 or newer (including OpenCV 5.x), ONNX Runtime, spdlog, and Exiv2 (optional, for metadata preservation). Linux and Windows release builds use Qt 6.10.3 and OpenCV 4.13.0. macOS builds use the latest stable Homebrew packages available when the workflow runs, while rolling-release development systems may also use OpenCV 5.x. FFmpeg is not a build dependency, but video processing needs `ffmpeg` and `ffprobe` at runtime (bundled next to the app, or on `PATH`). The detection models (SCRFD for faces, YOLOv9 for license plates) are not build dependencies — the app downloads them on first use, or you can pre-place them (see below).
+Requires CMake 3.24+, a C++20 compiler, Qt 6.8.1+ available to CMake (with the Linguist tools for UI translations; Qt Svg is optional and gives a crisp settings icon, falling back to a glyph without it), OpenCV 4.10.0 or newer with the `dnn` and `objdetect` modules (including OpenCV 5.x), ONNX Runtime, spdlog, and Exiv2 (optional, for metadata preservation). Linux and Windows release builds use Qt 6.10.3 and OpenCV 4.13.0. macOS builds use the latest stable Homebrew packages available when the workflow runs, while rolling-release development systems may also use OpenCV 5.x. FFmpeg is not a build dependency, but video processing needs `ffmpeg` and `ffprobe` at runtime (bundled next to the app, or on `PATH`). The detection models (YOLO5Face-n and YuNet for faces, YOLOv9 for license plates) are not build dependencies — the app downloads them on first use, or you can pre-place them (see below).
 
 The built-in models are **not bundled** and **not committed** to this repository. The app downloads them on first use (with an integrity check) and caches them under the platform data directory. To pre-place them for offline use, drop them in `models/`:
 
-- `models/2.5g_bnkps.onnx` — Fast (faces)
-- `models/10g_bnkps.onnx` — Accurate (faces)
+- `models/yolov5n_face.onnx` — Accurate (faces, recommended)
+- `models/face_detection_yunet_2023mar.onnx` — Fast (faces)
 - `models/yolo-v9-t-512-license-plates-end2end.onnx` — License plates
 
 You can also launch the app and use **Browse…** to select a custom SCRFD `.onnx` file.
@@ -150,7 +150,7 @@ Packaging scripts: [`scripts/package_macos.sh`](scripts/package_macos.sh), [`scr
 
 ## Privacy
 
-Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. CloakFrame makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model the first time you use each built-in model — the face models from Hugging Face, or the license plate model from the open-image-models project on GitHub — and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Settings → Check for updates on startup**. Supplying a custom SCRFD model with **Browse…** avoids downloading a built-in face model; license plate detection still requires its separate model.
+Your images and videos never leave your device — they are read from disk, processed locally (video encoding runs through a local FFmpeg process), and written to the output folder you pick. CloakFrame makes only two kinds of network request, and neither sends any image or personal data: a one-time download of a detection model from GitHub the first time you use each built-in model, and a check at launch against the GitHub Releases API to see whether a newer version exists. The update check can be turned off under **Settings → Check for updates on startup**. Supplying a custom SCRFD model with **Browse…** avoids downloading a built-in face model; license plate detection still requires its separate model.
 
 ## License
 
@@ -162,7 +162,11 @@ Copyright © 2026 Nyabi.
 
 CloakFrame is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-**SCRFD models** — the built-in models are **not distributed with CloakFrame**; the app downloads them on first use from a [Hugging Face mirror](https://huggingface.co/RuteNL/SCRFD-face-detection-ONNX). They originate from [InsightFace](https://github.com/deepinsight/insightface) and are available for **non-commercial research use only**, under their own terms separate from the application license (the mirror's Apache-2.0 tag does not override InsightFace's terms). See the [InsightFace Model Zoo](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md) for details.
+**YOLO5Face-n model** — the recommended face model is **not distributed with CloakFrame**; the app downloads an ONNX conversion from the [yolov5-face-onnx-inference release](https://github.com/yakhyo/yolov5-face-onnx-inference/releases/tag/weights). It is based on [YOLO5Face](https://github.com/deepcam-cn/yolov5-face), whose code is GPL-3.0, and was trained on WIDER FACE. WIDER FACE is restricted to non-commercial research use, so treat this model as **non-commercial only** under terms separate from the application license.
+
+**YuNet model** — the fast face model is **not distributed with CloakFrame**; the app downloads `face_detection_yunet_2023mar.onnx` from the [OpenCV Zoo YuNet model directory](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet). The model directory identifies the model license as MIT.
+
+**Custom SCRFD models** — custom SCRFD files remain supported through **Browse…**. Their terms depend on the source. InsightFace's pretrained models are limited to non-commercial research use; a mirror or file conversion does not replace those upstream terms.
 
 **License plate model** — the built-in license plate detector is **not distributed with CloakFrame**; the app downloads it on first use from the [open-image-models](https://github.com/ankandrew/open-image-models) project by ankandrew, which is MIT-licensed. It is a YOLOv9-architecture model (see [Citation](#citation)) and is downloaded at runtime and cached locally, under its upstream project's terms. Confirm the current terms with the open-image-models project before any commercial or redistribution use.
 
@@ -176,6 +180,15 @@ CloakFrame is free software: you can redistribute it and/or modify it under the 
   author={Jia Guo and Jiankang Deng and Alexandros Lattas and Stefanos Zafeiriou},
   year={2021},
   eprint={2105.04714},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV}
+}
+
+@misc{qi2021yolo5face,
+  title={YOLO5Face: Why Reinventing a Face Detector},
+  author={Delong Qi and Weijun Tan and Qi Yao and Jingfeng Liu},
+  year={2021},
+  eprint={2105.12931},
   archivePrefix={arXiv},
   primaryClass={cs.CV}
 }
